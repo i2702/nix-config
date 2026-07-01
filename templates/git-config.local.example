@@ -1,0 +1,15 @@
+# ~/.config/git/config.local のテンプレート(このマシン専用・リポジトリ管理外)。
+#
+# 公開リポジトリに個人/業務のメールアドレスを載せないため、git の identity は
+# この "config.local" でマシンごとに設定する。managed 設定(modules/git.nix)は
+# extraConfig の include.path 経由でこのファイルを読み込む。
+#
+# 使い方:
+#   cp templates/git-config.local.example ~/.config/git/config.local
+#   # その後 name / email を自分の値に書き換える
+#
+# ※このファイルが無いまま `home-manager switch` すると、activation チェックで
+#   エラーになり停止する(誤った identity での運用を防ぐため)。
+[user]
+	name = Your Name
+	email = you@example.com

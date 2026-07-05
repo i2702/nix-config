@@ -17,6 +17,7 @@
     ./modules/zellij.nix
     ./modules/lazygit.nix
     ./modules/alacritty.nix
+    ./modules/ghostty.nix
   ];
 
   programs.home-manager.enable = true;

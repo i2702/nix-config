@@ -133,6 +133,13 @@ in
       unset _ls_entries
       zstyle ':completion:*' list-colors "''${(@s.:.)LS_COLORS}"
 
+      # 新規ターミナル(ホーム直起動)時の初期作業ディレクトリを ~/Repository に変更
+      # tmux自動起動より前に実行し、tmuxセッションの初期ディレクトリにも反映させる。
+      # $PWD == $HOME に限定することで、プロジェクト内で開いた新規ペインが飛ばされるのを防ぐ。
+      if [[ "$PWD" == "$HOME" && -d "$HOME/Repository" ]]; then
+        cd "$HOME/Repository"
+      fi
+
       # tmux自動起動
       if command -v tmux &> /dev/null && [ -z "$TMUX" ]; then
         tmux

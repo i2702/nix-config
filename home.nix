@@ -17,6 +17,7 @@
     ./modules/zellij.nix
     ./modules/lazygit.nix
     ./modules/alacritty.nix
+    ./modules/aerospace.nix
     ./modules/ghostty.nix
   ];
 

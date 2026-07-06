@@ -7,6 +7,7 @@
   ];
 
   imports = [
+    ./modules/bat.nix
     ./modules/zsh.nix
     ./modules/git.nix
     ./modules/herdr.nix

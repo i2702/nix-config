@@ -95,9 +95,6 @@ in
         fi
       }
 
-      # --search-options=W: 検索を先頭↔末尾で回り込ませる（n/N のサイクル）
-      export BAT_PAGER='less -RFM --search-options=W'
-
       # 空Enterでls実行
       my-accept-line() {
         if [[ -z "$BUFFER" ]]; then

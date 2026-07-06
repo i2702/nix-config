@@ -54,6 +54,10 @@ in
       gr = ''grep -rniE --color=auto --exclude-dir={node_modules,dist,build,.git} -C 2'';
     } // lib.optionalAttrs pkgs.stdenv.isLinux {
       e = "explorer.exe";
+    } // lib.optionalAttrs pkgs.stdenv.isDarwin {
+      # macOSでは zed CLI がPATHにないため、Zed.app 同梱のCLIを直接使う
+      z = "/Applications/Zed.app/Contents/MacOS/cli";
+      za = "/Applications/Zed.app/Contents/MacOS/cli -a";
     };
 
     initContent = lib.mkOrder 1200 ''

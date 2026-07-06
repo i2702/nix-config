@@ -3,6 +3,7 @@
   # lazy.nvim が git clone でプラグインを取得し、telescope-fzf-native.nvim は
   # make でネイティブ拡張をビルドするため gcc/gnumake が必要。
   # ripgrep は telescope の live_grep が使う(home.nix で導入済み)。
+  # mason は curl/unzip/node(ts_ls用) を使うがシステム側にあるものを利用。
   home.packages = [
     pkgs.neovim
     pkgs.gcc
@@ -360,6 +361,10 @@
       require("plugins.cmp"),
       require("plugins.lsp"),
       require("plugins.telescope"),
+      require("plugins.treesitter"),
+      require("plugins.which-key"),
+      require("plugins.gitsigns"),
+      require("plugins.mini"),
     }, {
       ui = {
         border = "rounded",
@@ -440,17 +445,59 @@
   '';
 
   xdg.configFile."nvim/lua/plugins/lsp.lua".text = ''
-    -- LSP: nvim-lspconfig (nvim 0.11+ style)
+    -- LSP: nvim-lspconfig + mason (kickstart.nvim流)
+    -- masonがLSPサーバーを自動インストールし、mason-lspconfigが自動有効化する
     return {
       "neovim/nvim-lspconfig",
+      dependencies = {
+        -- 📦 LSPサーバー等の自動インストーラー
+        { "mason-org/mason.nvim", opts = {} },
+        "mason-org/mason-lspconfig.nvim",
+        -- 📶 LSPの進捗を右下に表示
+        { "j-hui/fidget.nvim", opts = {} },
+        -- 🌙 lua_lsにvim APIを認識させる(nvim設定編集用)
+        {
+          "folke/lazydev.nvim",
+          ft = "lua",
+          opts = {
+            library = {
+              { path = "''${3rd}/luv/library", words = { "vim%.uv" } },
+            },
+          },
+        },
+        "hrsh7th/cmp-nvim-lsp",
+      },
       config = function()
+        -- 補完capabilitiesを全サーバーに適用
         local capabilities = require("cmp_nvim_lsp").default_capabilities()
+        vim.lsp.config("*", { capabilities = capabilities })
 
-        -- TypeScript / JavaScript
-        vim.lsp.config("ts_ls", {
-          capabilities = capabilities,
+        -- Lua (nvim設定編集用)
+        vim.lsp.config("lua_ls", {
+          settings = {
+            Lua = {
+              completion = { callSnippet = "Replace" },
+            },
+          },
         })
-        vim.lsp.enable("ts_ls")
+
+        -- Nix (flake inputsのfetch確認プロンプトを自動化)
+        vim.lsp.config("nil_ls", {
+          settings = {
+            ["nil"] = {
+              nix = { flake = { autoArchive = true } },
+            },
+          },
+        })
+
+        -- サーバーを自動インストールし、インストール済みを自動有効化
+        require("mason-lspconfig").setup({
+          ensure_installed = {
+            "lua_ls",  -- Lua
+            "ts_ls",   -- TypeScript / JavaScript
+            "nil_ls",  -- Nix
+          },
+        })
 
         -- キーマップ(LSP アタッチ時に設定)
         vim.api.nvim_create_autocmd("LspAttach", {
@@ -515,6 +562,98 @@
         vim.keymap.set("n", "<leader>fb", builtin.buffers,     { desc = "バッファ一覧" })
         vim.keymap.set("n", "<leader>fh", builtin.help_tags,   { desc = "ヘルプ検索" })
         vim.keymap.set("n", "<leader>fr", builtin.oldfiles,    { desc = "最近開いたファイル" })
+      end,
+    }
+  '';
+
+  xdg.configFile."nvim/lua/plugins/treesitter.lua".text = ''
+    -- 🌳 Treesitter: 構文解析ベースのハイライト・インデント (kickstart.nvim流)
+    return {
+      "nvim-treesitter/nvim-treesitter",
+      branch = "master",  -- main(書き直し版)はAPIが別物のためmasterに固定
+      build = ":TSUpdate",
+      main = "nvim-treesitter.configs",
+      opts = {
+        ensure_installed = {
+          "bash", "c", "diff", "html", "lua", "luadoc",
+          "markdown", "markdown_inline", "query", "vim", "vimdoc",
+          "nix", "typescript", "tsx", "javascript", "json", "yaml",
+        },
+        auto_install = true,  -- 開いたファイルの言語を自動インストール
+        highlight = { enable = true },
+        indent = { enable = true },
+      },
+    }
+  '';
+
+  xdg.configFile."nvim/lua/plugins/which-key.lua".text = ''
+    -- ⌨️ which-key: キー入力途中に候補をポップアップ表示 (kickstart.nvim流)
+    return {
+      "folke/which-key.nvim",
+      event = "VeryLazy",
+      opts = {
+        delay = 0,
+        -- 既存キーマップのプレフィックスにグループ名を付与
+        spec = {
+          { "<leader>f", group = "🔍 検索/フォーマット" },
+          { "<leader>b", group = "📄 バッファ" },
+          { "<leader>c", group = "🔧 コード" },
+          { "<leader>r", group = "✏️ リネーム" },
+          { "<leader>h", group = "🌿 Git hunk" },
+        },
+      },
+    }
+  '';
+
+  xdg.configFile."nvim/lua/plugins/gitsigns.lua".text = ''
+    -- 🌿 gitsigns: 変更行のサイン表示とhunk操作 (kickstart.nvim流)
+    return {
+      "lewis6991/gitsigns.nvim",
+      opts = {
+        signs = {
+          add = { text = "+" },
+          change = { text = "~" },
+          delete = { text = "_" },
+          topdelete = { text = "‾" },
+          changedelete = { text = "~" },
+        },
+        on_attach = function(bufnr)
+          local gs = require("gitsigns")
+          local function map(mode, l, r, desc)
+            vim.keymap.set(mode, l, r, { buffer = bufnr, desc = desc })
+          end
+
+          -- hunk間移動
+          map("n", "]h", function() gs.nav_hunk("next") end, "次の変更hunk")
+          map("n", "[h", function() gs.nav_hunk("prev") end, "前の変更hunk")
+
+          -- hunk操作
+          map("n", "<leader>hp", gs.preview_hunk, "hunkプレビュー")
+          map("n", "<leader>hs", gs.stage_hunk, "hunkをステージ")
+          map("n", "<leader>hr", gs.reset_hunk, "hunkをリセット")
+          map("n", "<leader>hb", gs.blame_line, "行のblame表示")
+        end,
+      },
+    }
+  '';
+
+  xdg.configFile."nvim/lua/plugins/mini.lua".text = ''
+    -- 🧩 mini.nvim: 小粒プラグイン集 (kickstart.nvim流)
+    return {
+      "echasnovski/mini.nvim",
+      config = function()
+        -- テキストオブジェクト強化: va)・yinq・ci' などの範囲を賢く
+        require("mini.ai").setup({ n_lines = 500 })
+
+        -- 囲み操作: saiw) で囲む / sd' で削除 / sr)' で置換
+        require("mini.surround").setup()
+
+        -- ステータスライン(options.luaのshowmode=falseはこれが前提)
+        local statusline = require("mini.statusline")
+        statusline.setup({ use_icons = true })
+        statusline.section_location = function()
+          return "%2l:%-2v"
+        end
       end,
     }
   '';

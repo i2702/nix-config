@@ -14,6 +14,7 @@
     ./modules/vim.nix
     ./modules/neovim.nix
     ./modules/gh.nix
+    ./modules/ghq.nix
     ./modules/fzf.nix
     ./modules/lazygit.nix
     ./modules/alacritty.nix

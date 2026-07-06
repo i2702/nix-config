@@ -46,37 +46,27 @@
     # Alt-c でコピーモード開始。
     copy_mode = "alt+c"
 
-    # Alt-n で新規タブ
-    new_tab = "alt+n"
-
-    # Alt-w でウィンドウ削除
-    close_tab = "alt+w"
-
-    # Alt-m は元々「ウィンドウ(タブ)名変更」だったが、サイドバー見出しになる space(ワークスペース)
-    # 名の方が分かりにくく変更頻度も高いので、Alt-m を space 名変更(rename_workspace)に振り替える。
+    # Alt-m で space 名変更。サイドバー見出しになる space 名は変更頻度が高い。
     # (rename_workspace は herdr デフォルトだと prefix+shift+w に埋もれている。)
-    # タブ名変更(rename_tab)は失わないよう Alt-Shift-m へ退避する。
     rename_workspace = "alt+m"
-    rename_tab = "alt+shift+m"
 
-    # Alt-o / Alt-Right で次、Alt-p / Alt-Left で前のウィンドウ
-    next_tab = ["alt+o", "alt+right"]
-    previous_tab = ["alt+p", "alt+left"]
+    # space(ワークスペース)の操作
+    # プロジェクト単位のまとまり。タブはほぼ使わないため、元々タブ操作に充てていた
+    # Alt キー一式(alt+n/o/p, alt+left/right, alt+w, alt+1..9)を space 操作へ振り替えた。
+    # タブ操作自体は設定行の削除で herdr デフォルト(prefix+n / prefix+p / prefix+1..9 等の
+    # prefix 系)に戻るため、必要なら prefix 経由で今も使える。
+    # Mac では従来の cmd 系(cmd+t / cmd+] / cmd+[)も併用で残す(modules/ghostty.nix で unbind 済み)。
+    # 補足: ctrl+tab / ctrl+alt+n 系はこの端末環境では herdr まで届かず不達だった
+    # (Tab 系は kitty keyboard protocol の「全キー報告」フラグが必要)。素の Alt 系が確実。
+    new_workspace = ["alt+n", "cmd+t"]
+    next_workspace = ["alt+o", "alt+right", "cmd+]"]
+    previous_workspace = ["alt+p", "alt+left", "cmd+["]
 
-    # Alt-1〜9 でウィンドウ直接選択
-    switch_tab = ["alt+1", "alt+2", "alt+3", "alt+4", "alt+5", "alt+6", "alt+7", "alt+8", "alt+9"]
+    # Alt-w で space を閉じる(confirm_close がデフォルト有効のため確認モーダルが出る)
+    close_workspace = "alt+w"
 
-    # space(ワークスペース)」の操作
-    # プロジェクト単位のまとまり。macOS では cmd 修飾キーは herdr まで届く(実機確認済み)ため
-    # cmd 系に割り当てる。使う3キーはいずれも modules/ghostty.nix で unbind 済み:
-    #   cmd+t         … 元 new_tab            -> space 追加
-    #   cmd+] / cmd+[ … 元 goto_split 次/前   -> space 次/前(macOS の進む/戻る慣習に合わせる)
-    # 補足: 当初 ctrl+tab / ctrl+shift+tab にしたが、Tab は kitty keyboard protocol の
-    # 「全キー報告」フラグが無いと Ctrl+Tab が素の Tab に潰れて herdr が識別できず不達だった。
-    # herdr にはキーボードプロトコルを制御する設定が無いため Tab 系は諦め、cmd 系にしている。
-    new_workspace = "cmd+t"
-    next_workspace = "cmd+]"
-    previous_workspace = "cmd+["
+    # Alt-1〜9 で space 直接選択
+    switch_workspace = "alt+1..9"
 
     # 自動タイル分割: Alt-v / Alt-s のどちらでもフォーカス中タブに新ペインを追加して
     # 均等グリッドを保つ。type = "shell" はバックグラウンド実行で、スクリプトが herdr CLI 経由で

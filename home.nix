@@ -15,6 +15,7 @@
     ./modules/neovim.nix
     ./modules/gh.nix
     ./modules/ghq.nix
+    ./modules/gwq.nix
     ./modules/fzf.nix
     ./modules/lazygit.nix
     ./modules/alacritty.nix

@@ -55,12 +55,12 @@
     # Alt キー一式(alt+n/o/p, alt+left/right, alt+w, alt+1..9)を space 操作へ振り替えた。
     # タブ操作自体は設定行の削除で herdr デフォルト(prefix+n / prefix+p / prefix+1..9 等の
     # prefix 系)に戻るため、必要なら prefix 経由で今も使える。
-    # Mac では従来の cmd 系(cmd+t / cmd+] / cmd+[)も併用で残す(modules/ghostty.nix で unbind 済み)。
+    # Mac/WSL とも Alt 系に統一する(以前 Mac 用に併記していた cmd+t / cmd+] / cmd+[ は廃止)。
     # 補足: ctrl+tab / ctrl+alt+n 系はこの端末環境では herdr まで届かず不達だった
     # (Tab 系は kitty keyboard protocol の「全キー報告」フラグが必要)。素の Alt 系が確実。
-    new_workspace = ["alt+n", "cmd+t"]
-    next_workspace = ["alt+o", "alt+right", "cmd+]"]
-    previous_workspace = ["alt+p", "alt+left", "cmd+["]
+    new_workspace = "alt+n"
+    next_workspace = ["alt+o", "alt+right"]
+    previous_workspace = ["alt+p", "alt+left"]
 
     # Alt-w で space を閉じる(confirm_close がデフォルト有効のため確認モーダルが出る)
     close_workspace = "alt+w"

@@ -27,8 +27,8 @@
     keybind = ctrl+shift+tab=unbind
 
     # cmd+[ / cmd+] は Ghostty デフォルトで split 移動(goto_split:previous/next)だが、
-    # ペイン管理は herdr が行うため未使用。unbind して herdr の space 前後切替へ回す
-    # (herdr 側で previous_workspace = cmd+[ / next_workspace = cmd+] に割り当てる)。
+    # ペイン管理は herdr が行うため未使用。誤爆で Ghostty 側の split が動かないよう unbind のまま。
+    # (herdr の space 切替は Alt 系に統一済みのため、cmd 系を herdr へ回す用途は無い。)
     keybind = cmd+[=unbind
     keybind = cmd+]=unbind
   '';

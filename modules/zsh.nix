@@ -41,6 +41,7 @@ in
 
     shellAliases = {
       t = "tmux";
+      h = "herdr";
       p = "pnpm";
       c = "claude";
       lg = "lazygit";
@@ -123,16 +124,18 @@ in
       [ -f "$HOME/.vite-plus/env" ] && . "$HOME/.vite-plus/env"
 
       # 新規ターミナル(ホーム直起動)時の初期作業ディレクトリを ~/Repository に変更
-      # tmux自動起動より前に実行し、tmuxセッションの初期ディレクトリにも反映させる。
+      # herdr自動起動より前に実行し、herdrセッションの初期ディレクトリにも反映させる。
       # $PWD == $HOME に限定することで、プロジェクト内で開いた新規ペインが飛ばされるのを防ぐ。
       if [[ "$PWD" == "$HOME" && -d "$HOME/Repository" ]]; then
         cd "$HOME/Repository"
       fi
 
-      # tmux自動起動(いったん無効化)
-      # if command -v tmux &> /dev/null && [ -z "$TMUX" ]; then
-      #   tmux
-      # fi
+      # herdr自動起動(herdrセッション外なら herdr を実行してアタッチ)
+      # herdr が生成する各ペインでは HERDR_PANE_ID が設定されるため、この条件で
+      # ペイン内からの再帰起動を防ぐ(modules/herdr.nix の rename フックと同じ判定)。
+      if command -v herdr &> /dev/null && [ -z "$HERDR_PANE_ID" ]; then
+        herdr
+      fi
 
       # マージ済みローカルブランチを削除
       git-prune-localbranch() {

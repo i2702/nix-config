@@ -10,6 +10,7 @@
     ./modules/zsh.nix
     ./modules/git.nix
     ./modules/tmux.nix
+    ./modules/herdr.nix
     ./modules/vim.nix
     ./modules/neovim.nix
     ./modules/gh.nix

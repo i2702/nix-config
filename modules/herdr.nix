@@ -2,18 +2,11 @@
 {
   # herdr: AIエージェント時代のターミナルマルチプレクサ (https://herdr.dev)
   # パッケージは flake.nix の input (github:ogulcancelik/herdr) の overlay から供給。
-  # キーバインドは modules/tmux.nix と同等の Alt キー中心の構成にしている。
   home.packages = [ pkgs.herdr ];
 
   xdg.configFile."herdr/config.toml".text = ''
     # herdr 設定 (https://herdr.dev/docs/configuration/)
-    # tmux (modules/tmux.nix) と同じ操作感になるようキーバインドを合わせている。
     #
-    # tmux にあって herdr に相当機能が無いもの:
-    #   - Alt-a (attach): herdr はセッション外から `herdr` 実行でアタッチするため不要
-    #   - Alt-= (ペイン均等化): 相当アクションは無いが、下の自動タイル分割で常に均等化される
-    #     ため実質不要(手動リサイズは prefix+r のリサイズモードで代替)
-
     # 初回セットアップ画面をスキップする。このファイルは nix 管理の読み取り専用シンボリックリンク
     # なので、herdr 自身に config.toml を書き込ませない(設定変更はこのモジュールを編集して
     # home-manager switch で反映し、`herdr server reload-config` で再読み込みする)。
@@ -24,16 +17,16 @@
     version_check = false
 
     [keys]
-    # tmux: プレフィックスキーは Ctrl-b ではなく Alt-t
+    # プレフィックスキーは Ctrl-b ではなく Alt-t
     prefix = "alt+t"
 
-    # tmux: Alt-r で設定リロード
+    # Alt-r で設定リロード
     reload_config = "alt+r"
 
-    # tmux: Alt-d でデタッチ
+    # Alt-d でデタッチ
     detach = "alt+d"
 
-    # tmux: Alt-h/j/k/l でペイン移動(プレフィックス不要)
+    # Alt-h/j/k/l でペイン移動(プレフィックス不要)
     focus_pane_left = "alt+h"
     focus_pane_down = "alt+j"
     focus_pane_up = "alt+k"
@@ -47,18 +40,16 @@
     split_vertical = "prefix+v"
     split_horizontal = "prefix+s"
 
-    # tmux: Alt-q でペインを閉じる
+    # Alt-q でペインを閉じる
     close_pane = "alt+q"
 
-    # tmux: Alt-c でコピーモード開始。
-    # コピーモード内は herdr 標準で vi ライク(h/j/k/l 移動、v で選択開始、y でコピー)なので
-    # tmux 側の copy-mode-vi カスタマイズと同等の操作になる。
+    # Alt-c でコピーモード開始。
     copy_mode = "alt+c"
 
-    # tmux: Alt-n で新規ウィンドウ(herdr ではタブが tmux のウィンドウに対応)
+    # Alt-n で新規タブ
     new_tab = "alt+n"
 
-    # tmux: Alt-w でウィンドウ削除
+    # Alt-w でウィンドウ削除
     close_tab = "alt+w"
 
     # Alt-m は元々「ウィンドウ(タブ)名変更」だったが、サイドバー見出しになる space(ワークスペース)
@@ -68,14 +59,14 @@
     rename_workspace = "alt+m"
     rename_tab = "alt+shift+m"
 
-    # tmux: Alt-o / Alt-Right で次、Alt-p / Alt-Left で前のウィンドウ
+    # Alt-o / Alt-Right で次、Alt-p / Alt-Left で前のウィンドウ
     next_tab = ["alt+o", "alt+right"]
     previous_tab = ["alt+p", "alt+left"]
 
-    # tmux: Alt-1〜9 でウィンドウ直接選択
+    # Alt-1〜9 でウィンドウ直接選択
     switch_tab = ["alt+1", "alt+2", "alt+3", "alt+4", "alt+5", "alt+6", "alt+7", "alt+8", "alt+9"]
 
-    # tmux にはない「space(ワークスペース)」の操作。tab(=tmux ウィンドウ)の一つ上の階層で、
+    # space(ワークスペース)」の操作
     # プロジェクト単位のまとまり。macOS では cmd 修飾キーは herdr まで届く(実機確認済み)ため
     # cmd 系に割り当てる。使う3キーはいずれも modules/ghostty.nix で unbind 済み:
     #   cmd+t         … 元 new_tab            -> space 追加
@@ -122,7 +113,7 @@
     description = "ターミナル(非エージェント)ペインへフォーカス(タブ内で巡回)"
 
     [terminal]
-    # 新規ペイン/タブはカレントディレクトリを引き継ぐ(tmux の -c "#{pane_current_path}" 相当)。
+    # 新規ペイン/タブはカレントディレクトリを引き継ぐ
     # follow は「起動時」ではなく「現在(cd 後)」のディレクトリを引き継ぐ。自動タイル分割の
     # スクリプト側でも --cwd を明示しているため二重に確実。
     new_cwd = "follow"
@@ -132,14 +123,13 @@
     name = "terminal"
 
     [theme.custom]
-    # アクティブペイン境界などのアクセント色を tmux の colour214 相当のオレンジに
+    # アクティブペイン境界などのアクセント色をオレンジに
     accent = "#ffaf00"
 
     [ui]
-    # tmux: set -g mouse on 相当(herdr はデフォルト有効だが明示しておく)
+    # マウスを有効化
     mouse_capture = true
-    # tmux の Alt-n は名前入力なしで即ウィンドウを作るため、タブ名の入力プロンプトは無効化
-    # (タブ名は Alt-m でいつでも変更できる)
+    # 名前入力なしでタブを即時作成する
     prompt_new_tab_name = false
   '';
 

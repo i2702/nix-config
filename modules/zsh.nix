@@ -40,7 +40,6 @@ in
     autosuggestion.enable = true;
 
     shellAliases = {
-      t = "tmux";
       h = "herdr";
       p = "pnpm";
       c = "claude";
@@ -61,11 +60,6 @@ in
     };
 
     initContent = lib.mkOrder 1200 ''
-      # tmux内でのターミナルクエリ抑制(デバイス属性の表示を防ぐ)
-      if [[ -n "$TMUX" ]]; then
-          unset TMUX_PANE_INIT
-      fi
-
       # 🎨 half-lifeテーマのプロンプトをカスタマイズ
       # フォーマット: カレントディレクトリ [ブランチ名] ステータス記号 λ
       if [[ "$ZSH_THEME" == "half-life-custom" ]] || [[ "$ZSH_THEME" == "half-life" ]]; then

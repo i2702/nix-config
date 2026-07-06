@@ -96,7 +96,8 @@ in
         fi
       }
 
-      export BAT_PAGER='less -RFM'
+      # --search-options=W: 検索を先頭↔末尾で回り込ませる（n/N のサイクル）
+      export BAT_PAGER='less -RFM --search-options=W'
 
       # 空Enterでls実行
       my-accept-line() {
@@ -121,18 +122,6 @@ in
       # vp node
       [ -f "$HOME/.vite-plus/env" ] && . "$HOME/.vite-plus/env"
 
-      # 777ディレクトリ(other-writable=ow / sticky+other-writable=tw)の緑背景を消し、
-      # 通常ディレクトリと同じ青文字にする。
-      # 末尾追記だと(1)tmux等のネストで増殖し(2)zsh補完は重複時に最初の定義を優先するため効かない。
-      # 既存の ow=/tw= を除去して1つだけ設定し、補完(list-colors)にも再適用する。
-      typeset -a _ls_entries
-      _ls_entries=("''${(@s.:.)LS_COLORS}")
-      _ls_entries=("''${(@)_ls_entries:#(ow|tw)=*}")
-      _ls_entries+=("ow=01;34" "tw=01;34")
-      export LS_COLORS="''${(j.:.)_ls_entries}"
-      unset _ls_entries
-      zstyle ':completion:*' list-colors "''${(@s.:.)LS_COLORS}"
-
       # 新規ターミナル(ホーム直起動)時の初期作業ディレクトリを ~/Repository に変更
       # tmux自動起動より前に実行し、tmuxセッションの初期ディレクトリにも反映させる。
       # $PWD == $HOME に限定することで、プロジェクト内で開いた新規ペインが飛ばされるのを防ぐ。
@@ -140,10 +129,10 @@ in
         cd "$HOME/Repository"
       fi
 
-      # tmux自動起動
-      if command -v tmux &> /dev/null && [ -z "$TMUX" ]; then
-        tmux
-      fi
+      # tmux自動起動(いったん無効化)
+      # if command -v tmux &> /dev/null && [ -z "$TMUX" ]; then
+      #   tmux
+      # fi
 
       # マージ済みローカルブランチを削除
       git-prune-localbranch() {

@@ -251,8 +251,28 @@
   # 一意性: herdr はエージェント名の一意を強制する(同名の別ペインがあると `agent_name_taken`)。
   # 同じプロジェクトに複数の claude を開くと basename が衝突するため、"base~2","base~3"… と
   # 連番で再試行する(一意制約以外のエラーは即中断)。
+  #
+  # ペイン境界ラベル: これとは別に、全ペインの境界タイトルへカレントディレクトリ名を
+  # 常時表示する(_herdr_label_by_cwd)。`pane rename` は手動ラベルだけを設定するコマンドで、
+  # `agent rename` と違い素のシェルをサイドバーへ昇格させないため、cd 毎に全ペインで安全に
+  # 呼べる。手動ラベルは show_agent_labels_on_pane_borders 設定と無関係に境界へ常時表示される
+  # (見えるのは分割時のみ。1ペインだけのタブは境界自体が無い)。socket 経由 ~6ms なので同期実行。
+  # なお `agent rename` は内部で手動ラベルも同時に設定し、`--clear` はエージェント名しか
+  # 消さない(ラベルは残留する)。claude 終了時に _herdr_label_by_cwd を呼び直すことで、
+  # 連番付き残留ラベル(例: "repo~2")を素の cwd 名へ戻す。
   programs.zsh.initContent = lib.mkOrder 1500 ''
     if [[ -n "$HERDR_PANE_ID" ]]; then
+      # ペイン境界ラベルをカレントディレクトリ名に追従させる(シェル起動時 + cd 毎)。
+      _herdr_label_by_cwd() {
+        local label="''${PWD:t}"
+        [[ "$PWD" == "$HOME" ]] && label="~"
+        [[ "$PWD" == "/" ]] && label="/"
+        herdr pane rename "$HERDR_PANE_ID" "$label" >/dev/null 2>&1
+      }
+      autoload -Uz add-zsh-hook
+      add-zsh-hook chpwd _herdr_label_by_cwd
+      _herdr_label_by_cwd
+
       _herdr_name_by_cwd() {
         local base="''${PWD:t}" try out n=1
         [[ "$PWD" == "$HOME" ]] && base="~"
@@ -266,11 +286,14 @@
       }
       # claude 起動ラッパー。起動時に cwd 名を付け、終了時に名前を外す(= 一覧から落とす)。
       # command で実体を呼ぶので再帰しない。alias c=claude も alias 展開後この関数に届く。
+      # --clear は境界ラベルまでは消さないため、_herdr_label_by_cwd で cwd 名へ戻す
+      # (agent rename が付けた連番付きラベル "repo~2" などの残留を防ぐ)。
       claude() {
         _herdr_name_by_cwd
         command claude "$@"
         local ret=$?
         herdr agent rename "$HERDR_PANE_ID" --clear >/dev/null 2>&1
+        _herdr_label_by_cwd
         return $ret
       }
     fi

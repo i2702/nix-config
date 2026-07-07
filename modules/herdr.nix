@@ -93,20 +93,20 @@
     # 「ターミナルへフォーカス」に相当する native アクションは存在しない
     # (ターミナルは通常ペイン扱いで focus_pane_* / 方向指定でしか辿れない)。
     # そのため既存の自動タイル分割と同様、herdr CLI を使うカスタムコマンドで実装する。
-    #   Alt-f = エージェント(claude 等)ペインへ。タブも space も飛び越えて全エージェントを巡回する
+    #   Alt-a = エージェント(claude 等)ペインへ。タブも space も飛び越えて全エージェントを巡回する
     #           (herdr agent focus は space をまたいでフォーカスできることを確認済み)。
     #   Alt-e = 非エージェント(シェル)ペインへ。こちらは従来どおり現在タブ内で巡回する
     #           (シェルはプロジェクト内の行き来がほとんどのため。global を渡せば横断になる)。
     # 同じ role のペインが複数あれば、押すたびに次のペインへ巡回する。
     [[keys.command]]
-    key = "alt+f"
+    key = "alt+a"
     type = "shell"
     command = "~/.config/herdr/scripts/focus-role.sh agent global"
     description = "エージェントペインへフォーカス(全 space 横断で巡回)"
 
-    # Alt-Shift-f は同じリングを逆順に巡回する(行き過ぎたとき一つ戻る用)
+    # Alt-Shift-a は同じリングを逆順に巡回する(行き過ぎたとき一つ戻る用)
     [[keys.command]]
-    key = "alt+shift+f"
+    key = "alt+shift+a"
     type = "shell"
     command = "~/.config/herdr/scripts/focus-role.sh agent global prev"
     description = "エージェントペインへフォーカス(全 space 横断で逆順巡回)"
@@ -176,13 +176,13 @@
     executable = true;
   };
 
-  # エージェント/ターミナルのペインへフォーカスを移すスクリプト(Alt-f / Alt-Shift-f / Alt-e から呼ばれる)。
+  # エージェント/ターミナルのペインへフォーカスを移すスクリプト(Alt-a / Alt-Shift-a / Alt-e から呼ばれる)。
   # 引数1: agent = エージェント(.agent フィールドあり)ペイン, terminal = 非エージェント(シェル)ペイン。
   # 引数2: 巡回範囲。global = タブも space も飛び越えて全ペインを対象 / tab(既定) = 現在タブ内のみ。
   # 引数3: 巡回方向。next(既定) = 並び順 / prev = 逆順。
   # 指定 role に合致するペイン一覧から「アクティブペインの次(prev なら前)」を選んで巡回フォーカスする。
   # pane list は全 space のペインを space 順で返すので、そのままの並びが巡回リングになる。
-  # アクティブが別 role に居るとき(例: シェルに居て Alt-f)は、まず同じ space の role ペイン、
+  # アクティブが別 role に居るとき(例: シェルに居て Alt-a)は、まず同じ space の role ペイン、
   # 無ければ並び順でアクティブより後ろの最初のペイン(prev なら前の最後のペイン)へ移る。
   # フォーカスは herdr agent focus <terminal_id> で行う。任意ペインを id 指定でフォーカスできる
   # 唯一の CLI 手段がこれ(pane focus は方向指定のみ)で、space をまたぐ移動もこれで機能する。

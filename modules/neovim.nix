@@ -647,8 +647,19 @@
         -- テキストオブジェクト強化: va)・yinq・ci' などの範囲を賢く
         require("mini.ai").setup({ n_lines = 500 })
 
-        -- 囲み操作: saiw) で囲む / sd' で削除 / sr)' で置換
-        require("mini.surround").setup()
+        -- 囲み操作: gsaiw) で囲む / gsd' で削除 / gsr)' で置換
+        -- prefixをgsにずらし、normalの s は素のvim(1文字削除→挿入)に戻す
+        require("mini.surround").setup({
+          mappings = {
+            add = "gsa",
+            delete = "gsd",
+            find = "gsf",
+            find_left = "gsF",
+            highlight = "gsh",
+            replace = "gsr",
+            update_n_lines = "gsn",
+          },
+        })
 
         -- ステータスライン(options.luaのshowmode=falseはこれが前提)
         local statusline = require("mini.statusline")

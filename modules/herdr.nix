@@ -88,18 +88,28 @@
     command = "~/.config/herdr/scripts/autotile-split.sh"
     description = "自動タイル分割(グリッドに追加)"
 
-    # エージェント/ターミナルのペイン間フォーカス移動(現在タブ内で巡回)。
+    # エージェント/ターミナルのペイン間フォーカス移動。
     # herdr の native な focus_agent はインデックス型(prefix+alt+1..9)しかなく、
     # 「ターミナルへフォーカス」に相当する native アクションは存在しない
     # (ターミナルは通常ペイン扱いで focus_pane_* / 方向指定でしか辿れない)。
     # そのため既存の自動タイル分割と同様、herdr CLI を使うカスタムコマンドで実装する。
-    #   Alt-f = エージェント(claude 等)ペインへ / Alt-e = 非エージェント(シェル)ペインへ。
-    # 同じ role のペインが現在タブに複数あれば、押すたびに次のペインへ巡回する。
+    #   Alt-f = エージェント(claude 等)ペインへ。タブも space も飛び越えて全エージェントを巡回する
+    #           (herdr agent focus は space をまたいでフォーカスできることを確認済み)。
+    #   Alt-e = 非エージェント(シェル)ペインへ。こちらは従来どおり現在タブ内で巡回する
+    #           (シェルはプロジェクト内の行き来がほとんどのため。global を渡せば横断になる)。
+    # 同じ role のペインが複数あれば、押すたびに次のペインへ巡回する。
     [[keys.command]]
     key = "alt+f"
     type = "shell"
-    command = "~/.config/herdr/scripts/focus-role.sh agent"
-    description = "エージェントペインへフォーカス(タブ内で巡回)"
+    command = "~/.config/herdr/scripts/focus-role.sh agent global"
+    description = "エージェントペインへフォーカス(全 space 横断で巡回)"
+
+    # Alt-Shift-f は同じリングを逆順に巡回する(行き過ぎたとき一つ戻る用)
+    [[keys.command]]
+    key = "alt+shift+f"
+    type = "shell"
+    command = "~/.config/herdr/scripts/focus-role.sh agent global prev"
+    description = "エージェントペインへフォーカス(全 space 横断で逆順巡回)"
 
     [[keys.command]]
     key = "alt+e"
@@ -166,14 +176,18 @@
     executable = true;
   };
 
-  # エージェント/ターミナルのペインへフォーカスを移すスクリプト(Alt-f / Alt-e から呼ばれる)。
-  # 引数: agent = エージェント(.agent フィールドあり)ペイン, terminal = 非エージェント(シェル)ペイン。
-  # 現在タブの、指定 role に合致するペイン一覧から「アクティブペインの次」を選んで巡回フォーカスする。
-  # アクティブが別 role に居るとき(例: シェルに居て Alt-f)は role 側の先頭ペインへ移る。
+  # エージェント/ターミナルのペインへフォーカスを移すスクリプト(Alt-f / Alt-Shift-f / Alt-e から呼ばれる)。
+  # 引数1: agent = エージェント(.agent フィールドあり)ペイン, terminal = 非エージェント(シェル)ペイン。
+  # 引数2: 巡回範囲。global = タブも space も飛び越えて全ペインを対象 / tab(既定) = 現在タブ内のみ。
+  # 引数3: 巡回方向。next(既定) = 並び順 / prev = 逆順。
+  # 指定 role に合致するペイン一覧から「アクティブペインの次(prev なら前)」を選んで巡回フォーカスする。
+  # pane list は全 space のペインを space 順で返すので、そのままの並びが巡回リングになる。
+  # アクティブが別 role に居るとき(例: シェルに居て Alt-f)は、まず同じ space の role ペイン、
+  # 無ければ並び順でアクティブより後ろの最初のペイン(prev なら前の最後のペイン)へ移る。
   # フォーカスは herdr agent focus <terminal_id> で行う。任意ペインを id 指定でフォーカスできる
-  # 唯一の CLI 手段がこれ(pane focus は方向指定のみ)。ターミナル(エージェント不在)を対象にすると
-  # 戻り値は agent_not_found エラーになるが、フォーカス移動自体は副作用として成功するため
-  # >/dev/null 2>&1 || true でエラー出力と終了コードを握りつぶす。
+  # 唯一の CLI 手段がこれ(pane focus は方向指定のみ)で、space をまたぐ移動もこれで機能する。
+  # ターミナル(エージェント不在)を対象にすると戻り値は agent_not_found エラーになるが、
+  # フォーカス移動自体は副作用として成功するため >/dev/null 2>&1 || true で握りつぶす。
   xdg.configFile."herdr/scripts/focus-role.sh" = {
     text = ''
       #!/bin/bash
@@ -182,23 +196,34 @@
       jq="${pkgs.jq}/bin/jq"
       active="''${HERDR_ACTIVE_PANE_ID:?HERDR_ACTIVE_PANE_ID is not set}"
       role="''${1:-agent}"
+      scope="''${2:-tab}"
+      dir="''${3:-next}"
 
-      # 現在タブの role 一致ペイン群から「アクティブの次」の terminal_id を選ぶ。
-      # アクティブが一覧に無い(別 role に居る)ときは先頭を選ぶ。
+      # role 一致ペイン群(scope=tab なら現在タブに限定)から「アクティブの次(prev なら前)」の
+      # terminal_id を選ぶ。to_entries の key = pane list 全体での並び位置。これをアクティブ同定と
+      # 「前後」判定に使う。
       target=$(
         "$herdr" pane list \
-          | "$jq" -r --arg a "$active" --arg role "$role" '
-              .result.panes as $p
-              | ($p[] | select(.pane_id == $a or .terminal_id == $a) | .tab_id) as $tab
-              | [ $p[]
-                  | select(.tab_id == $tab)
-                  | select(if $role == "terminal" then (.agent == null) else (.agent != null) end) ] as $list
+          | "$jq" -r --arg a "$active" --arg role "$role" --arg scope "$scope" --arg dir "$dir" '
+              (.result.panes | to_entries) as $e
+              | ($e[] | select(.value.pane_id == $a or .value.terminal_id == $a)) as $act
+              | [ $e[]
+                  | select(.value.agent | if $role == "terminal" then . == null else . != null end)
+                  | select($scope == "global" or .value.tab_id == $act.value.tab_id) ] as $list
+              | (if $dir == "prev" then -1 else 1 end) as $step
               | if ($list | length) == 0 then empty
                 else
-                  ($list | map(.pane_id == $a or .terminal_id == $a) | index(true)) as $idx
-                  | (if $idx == null then 0 else (($idx + 1) % ($list | length)) end) as $next
-                  | $list[$next].terminal_id
+                  ($list | map(.key == $act.key) | index(true)) as $idx
+                  | if $idx != null then $list[($idx + $step + ($list | length)) % ($list | length)]
+                    else
+                      ([ $list[] | select(.value.workspace_id == $act.value.workspace_id) ] | first)
+                      // (if $dir == "prev"
+                          then ([ $list[] | select(.key < $act.key) ] | last)  // $list[-1]
+                          else ([ $list[] | select(.key > $act.key) ] | first) // $list[0]
+                          end)
+                    end
                 end
+              | .value.terminal_id
             '
       )
 

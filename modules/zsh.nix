@@ -51,7 +51,8 @@ in
       z = "zed";
       za = "zed -a";
       gr = ''grep -rniE --color=auto --exclude-dir={node_modules,dist,build,.git} -C 2'';
-      ghq-cd = "cd $(ghq list -p | fzf)";
+      cd-ghq = "cd $(ghq list -p | fzf)";
+      cd-gwq = "gwq cd";
     } // lib.optionalAttrs pkgs.stdenv.isLinux {
       e = "explorer.exe";
     } // lib.optionalAttrs pkgs.stdenv.isDarwin {

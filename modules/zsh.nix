@@ -55,7 +55,8 @@ in
       e = "explorer.exe";
     } // lib.optionalAttrs pkgs.stdenv.isDarwin {
       # macOSでは zed CLI がPATHにないため、Zed.app 同梱のCLIを直接使う
-      z = "/Applications/Zed.app/Contents/MacOS/cli";
+      # -n で常に新しいウィンドウで開く(既存ウィンドウに追加したいときは za を使う)
+      z = "/Applications/Zed.app/Contents/MacOS/cli -n";
       za = "/Applications/Zed.app/Contents/MacOS/cli -a";
     };
 

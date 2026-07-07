@@ -59,8 +59,8 @@
     # 補足: ctrl+tab / ctrl+alt+n 系はこの端末環境では herdr まで届かず不達だった
     # (Tab 系は kitty keyboard protocol の「全キー報告」フラグが必要)。素の Alt 系が確実。
     new_workspace = "alt+n"
-    next_workspace = ["alt+o", "alt+right"]
-    previous_workspace = ["alt+p", "alt+left"]
+    next_workspace = ["alt+p", "alt+right"]
+    previous_workspace = ["alt+o", "alt+left"]
 
     # Alt-w で space を閉じる(confirm_close がデフォルト有効のため確認モーダルが出る)
     close_workspace = "alt+w"

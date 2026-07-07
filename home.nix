@@ -20,6 +20,7 @@
     ./modules/lazygit.nix
     ./modules/alacritty.nix
     ./modules/ghostty.nix
+    ./modules/zed.nix
   ];
 
   programs.home-manager.enable = true;

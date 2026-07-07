@@ -216,6 +216,7 @@
     keymap("n", "gt", vim.lsp.buf.type_definition, { desc = "型定義へジャンプ" })
     keymap("n", "gr", vim.lsp.buf.references, { desc = "参照一覧" })
     keymap("n", "K", vim.lsp.buf.hover, { desc = "ホバー情報" })
+    keymap("n", "<C-.>", vim.lsp.buf.hover, { desc = "ホバー情報" })
     keymap("n", "<leader>ca", vim.lsp.buf.code_action, { desc = "コードアクション" })
     keymap("n", "<leader>rn", vim.lsp.buf.rename, { desc = "リネーム" })
     keymap("n", "<leader>f", vim.lsp.buf.format, { desc = "フォーマット" })
@@ -504,6 +505,7 @@
           callback = function(ev)
             local opts = { buffer = ev.buf, silent = true }
             vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)
+            vim.keymap.set("n", "<C-.>", vim.lsp.buf.hover, opts)
             vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
             vim.keymap.set("n", "gr", vim.lsp.buf.references, opts)
             vim.keymap.set("n", "gi", vim.lsp.buf.implementation, opts)

@@ -40,6 +40,7 @@ in
     autosuggestion.enable = true;
 
     shellAliases = {
+      t = "tmux";
       h = "herdr";
       p = "pnpm";
       c = "claude";
@@ -63,6 +64,11 @@ in
     };
 
     initContent = lib.mkOrder 1200 ''
+      # tmux内でのターミナルクエリ抑制(デバイス属性の表示を防ぐ)
+      if [[ -n "$TMUX" ]]; then
+          unset TMUX_PANE_INIT
+      fi
+
       # 🎨 half-lifeテーマのプロンプトをカスタマイズ
       # フォーマット: カレントディレクトリ [ブランチ名] ステータス記号 λ
       if [[ "$ZSH_THEME" == "half-life-custom" ]] || [[ "$ZSH_THEME" == "half-life" ]]; then
@@ -122,17 +128,37 @@ in
       [ -f "$HOME/.vite-plus/env" ] && . "$HOME/.vite-plus/env"
 
       # 新規ターミナル(ホーム直起動)時の初期作業ディレクトリを ~/Repository に変更
-      # herdr自動起動より前に実行し、herdrセッションの初期ディレクトリにも反映させる。
+      # マルチプレクサ自動起動より前に実行し、herdr/tmux セッションの初期ディレクトリにも反映させる。
       # $PWD == $HOME に限定することで、プロジェクト内で開いた新規ペインが飛ばされるのを防ぐ。
       if [[ "$PWD" == "$HOME" && -d "$HOME/Repository" ]]; then
         cd "$HOME/Repository"
       fi
 
-      # herdr自動起動(herdrセッション外なら herdr を実行してアタッチ)
-      # herdr が生成する各ペインでは HERDR_PANE_ID が設定されるため、この条件で
-      # ペイン内からの再帰起動を防ぐ(modules/herdr.nix の rename フックと同じ判定)。
-      if command -v herdr &> /dev/null && [ -z "$HERDR_PANE_ID" ]; then
-        herdr
+      # ==========================================
+      # ターミナルマルチプレクサの自動起動(herdr / tmux の振り分け)
+      #   - Zed のターミナル($ZED_TERM が設定される)     → tmux
+      #   - それ以外(Ghostty など通常ターミナル)          → herdr
+      #
+      # 【同時起動の防止】既に herdr($HERDR_PANE_ID)または tmux($TMUX)の
+      #   セッション内にいる場合は何もしない。これで
+      #     - herdr ペイン内で再帰的に herdr が起動する
+      #     - tmux 内で再帰的に tmux が起動する
+      #     - herdr と tmux が入れ子・二重に起動する
+      #   のいずれも防ぐ($HERDR_PANE_ID / $TMUX はどちらも子シェルへ継承される)。
+      #
+      # 【対話シェル限定】-o interactive のときだけ起動する。Zed エージェントパネルが
+      #   実行するコマンドは非対話シェル(.zshrc を読み込まない)なので、そもそもここへ
+      #   到達しないが、明示条件を付けて安全側に倒す。エージェントパネルの「ターミナル
+      #   スレッド」のような対話ターミナルでは $ZED_TERM が立つため tmux が起動する。
+      #   (補足: Zed には通常ターミナルとエージェント用ターミナルを区別する環境変数が
+      #    無いため、Zed のターミナルは一律 tmux とする。)
+      # ==========================================
+      if [[ -o interactive && -z "$TMUX" && -z "$HERDR_PANE_ID" ]]; then
+        if [[ -n "$ZED_TERM" ]]; then
+          command -v tmux &> /dev/null && tmux
+        else
+          command -v herdr &> /dev/null && herdr
+        fi
       fi
 
       # マージ済みローカルブランチを削除

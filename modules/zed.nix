@@ -132,16 +132,24 @@
           "alt-w": "pane::CloseActiveItem"
         }
       },
+      {
+        // Cmd-P/Cmd-Shift-P で開くパレットを Ctrl-P/Ctrl-Shift-P でも開く
+        // (ctrl-p=ファイルファインダー、ctrl-shift-p=コマンドパレット)
+        "bindings": {
+          "ctrl-p": "file_finder::Toggle",
+          "ctrl-shift-p": "command_palette::Toggle"
+        }
+      },
       // 各種フォーカス
       {
         "bindings": {
-          "alt-e": "editor::ToggleFocus",
-          "alt-a": "agent::ToggleFocus",
-          "alt-p": "project_panel::ToggleFocus",
-          "alt-o": "outline_panel::ToggleFocus",
-          "alt-g": "git_panel::ToggleFocus",
-          "alt-c": "collab_panel::ToggleFocus",
-          "alt-t": "terminal_panel::Toggle"
+          "ctrl-alt-e": "editor::ToggleFocus",
+          "ctrl-alt-a": "agent::ToggleFocus",
+          "ctrl-alt-p": "project_panel::ToggleFocus",
+          "ctrl-alt-o": "outline_panel::ToggleFocus",
+          "ctrl-alt-g": "git_panel::ToggleFocus",
+          "ctrl-alt-c": "collab_panel::ToggleFocus",
+          "ctrl-alt-t": "terminal_panel::Toggle"
         }
       },
       {

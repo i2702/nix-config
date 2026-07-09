@@ -25,6 +25,10 @@
       "minimap": {
         "show": "auto"
       },
+      // タブをプレビュー(テンポラリ)で開かず、常に通常タブとして開く
+      "preview_tabs": {
+        "enabled": false
+      },
       "cli_default_open_behavior": "existing_window",
       "project_panel": {
         "dock": "right"
@@ -149,7 +153,9 @@
           "ctrl-alt-o": "outline_panel::ToggleFocus",
           "ctrl-alt-g": "git_panel::ToggleFocus",
           "ctrl-alt-c": "collab_panel::ToggleFocus",
-          "ctrl-alt-t": "terminal_panel::Toggle"
+          "ctrl-alt-t": "terminal_panel::Toggle",
+          // プロジェクト全体を対象とした検索(VSCode の Find in Files 相当)
+          "ctrl-alt-f": "pane::DeploySearch"
         }
       },
       {
@@ -179,6 +185,14 @@
         "context": "Editor",
         "bindings": {
           "g r": "editor::FindAllReferences"
+        }
+      },
+      {
+        // g r で開いた references(multibuffer)から、選択中の excerpt(ファイル)を開く。
+        // 既定の g space に加えて g o でも開けるようにする。
+        "context": "VimControl && !menu",
+        "bindings": {
+          "g o": "editor::OpenExcerpts"
         }
       },
       {

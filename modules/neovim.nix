@@ -366,6 +366,7 @@
       require("plugins.which-key"),
       require("plugins.gitsigns"),
       require("plugins.mini"),
+      require("plugins.neo-tree"),
     }, {
       ui = {
         border = "rounded",
@@ -387,8 +388,7 @@
     })
   '';
 
-  # chezmoiでは追跡されていなかったが、init.luaが require するため実機上で
-  # 必須のファイル(~/.config/nvim/lua/plugins/colorscheme.lua)から採取。
+  # plugins/init.lua が require するため必須のカラースキーマ定義。
   xdg.configFile."nvim/lua/plugins/colorscheme.lua".text = ''
     -- ===================================
     -- 🎨 カラースキーマ
@@ -513,7 +513,8 @@
             vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, opts)
             vim.keymap.set("n", "[d", vim.diagnostic.goto_prev, opts)
             vim.keymap.set("n", "]d", vim.diagnostic.goto_next, opts)
-            vim.keymap.set("n", "<leader>e", vim.diagnostic.open_float, opts)
+            -- <leader>e は neo-tree(ファイルツリー)に譲り、診断フロートは <leader>cd へ
+            vim.keymap.set("n", "<leader>cd", vim.diagnostic.open_float, opts)
           end,
         })
 
@@ -602,6 +603,7 @@
           { "<leader>c", group = "🔧 コード" },
           { "<leader>r", group = "✏️ リネーム" },
           { "<leader>h", group = "🌿 Git hunk" },
+          { "<leader>s", group = "🔡 Surround" },
         },
       },
     }
@@ -647,17 +649,17 @@
         -- テキストオブジェクト強化: va)・yinq・ci' などの範囲を賢く
         require("mini.ai").setup({ n_lines = 500 })
 
-        -- 囲み操作: gsaiw) で囲む / gsd' で削除 / gsr)' で置換
-        -- prefixをgsにずらし、normalの s は素のvim(1文字削除→挿入)に戻す
+        -- 囲み操作: ,saiw) で囲む / ,sd' で削除 / ,sr)' で置換
+        -- prefixを<leader>s(=,s)にずらし、normalの s は素のvim(1文字削除→挿入)に戻す
         require("mini.surround").setup({
           mappings = {
-            add = "gsa",
-            delete = "gsd",
-            find = "gsf",
-            find_left = "gsF",
-            highlight = "gsh",
-            replace = "gsr",
-            update_n_lines = "gsn",
+            add = "<Leader>sa",
+            delete = "<Leader>sd",
+            find = "<Leader>sf",
+            find_left = "<Leader>sF",
+            highlight = "<Leader>sh",
+            replace = "<Leader>sr",
+            update_n_lines = "<Leader>sn",
           },
         })
 
@@ -668,6 +670,35 @@
           return "%2l:%-2v"
         end
       end,
+    }
+  '';
+
+  xdg.configFile."nvim/lua/plugins/neo-tree.lua".text = ''
+    -- 🗂️ neo-tree: ファイルエクスプローラー
+    -- キーマップ(<leader>e / <leader>o)は keymaps.lua で定義済み。
+    -- cmd指定でNeotreeコマンド呼び出し時に遅延ロードする。
+    return {
+      "nvim-neo-tree/neo-tree.nvim",
+      branch = "v3.x",
+      cmd = "Neotree",
+      dependencies = {
+        "nvim-lua/plenary.nvim",
+        "nvim-tree/nvim-web-devicons",
+        "MunifTanjim/nui.nvim",
+      },
+      opts = {
+        filesystem = {
+          follow_current_file = { enabled = true },
+          use_libuv_file_watcher = true,
+          filtered_items = {
+            hide_dotfiles = false,
+            hide_gitignored = false,
+          },
+        },
+        window = {
+          width = 32,
+        },
+      },
     }
   '';
 }

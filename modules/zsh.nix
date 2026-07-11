@@ -1,5 +1,12 @@
 { pkgs, lib, ... }:
 let
+  # WSL から Windows ネイティブの Zed を CLI 起動するためのコマンド。
+  # bin/Zed.exe が CLI 本体で、--wsl <user@distro> を付けると WSL 内のパスを
+  # Windows 側の Zed から開ける(GUI の wsl_connections と同じ仕組み)。
+  # 注意: パスは絶対パスで渡すこと。Windows 側は WSL のカレントを知らないため、
+  # 引数なし(カレント)や相対パスは解決できない。
+  zedWinCli = "/mnt/c/Users/m1205/AppData/Local/Programs/Zed/bin/Zed.exe --wsl m1205062@Ubuntu";
+
   # WSL(Windows側との連携)に依存する部分。Macでは無効化する。
   wslOnly = lib.optionalString pkgs.stdenv.isLinux ''
     # WSL clipboard (UTF-8 → Shift-JIS変換)
@@ -49,13 +56,14 @@ in
       nv = "nvim";
       vim = "nvim";
       le = "less";
-      z = "zed";
-      za = "zed -a";
       gr = ''grep -rniE --color=auto --exclude-dir={node_modules,dist,build,.git} -C 2'';
       cdg = "cd $(ghq list -p | fzf)";
       cd-w = "gwq cd";
     } // lib.optionalAttrs pkgs.stdenv.isLinux {
       e = "explorer.exe";
+      # WSL: Windows ネイティブの Zed で開く(za は既存ウィンドウに追加)
+      z = zedWinCli;
+      za = "${zedWinCli} -a";
     } // lib.optionalAttrs pkgs.stdenv.isDarwin {
       # macOSでは zed CLI がPATHにないため、Zed.app 同梱のCLIを直接使う
       # -n で常に新しいウィンドウで開く(既存ウィンドウに追加したいときは za を使う)

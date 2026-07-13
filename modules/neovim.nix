@@ -1,13 +1,25 @@
 { pkgs, ... }:
+let
+  # nvim-treesitter はプラグイン本体もビルド済みパーサーも nix で供給する。
+  # (lazy.nvim の git clone や実行時の :TSInstall によるビルドを不要にする)
+  treesitter = pkgs.vimPlugins.nvim-treesitter.withAllGrammars;
+  treesitterGrammars = pkgs.symlinkJoin {
+    name = "nvim-treesitter-grammars";
+    paths = treesitter.dependencies;
+  };
+in
 {
   # lazy.nvim が git clone でプラグインを取得し、telescope-fzf-native.nvim は
   # make でネイティブ拡張をビルドするため gcc/gnumake が必要。
   # ripgrep は telescope の live_grep が使う(home.nix で導入済み)。
   # mason は curl/unzip/node(ts_ls用) を使うがシステム側にあるものを利用。
+  # nil は mason だと cargo でソースビルドするため(rustツールチェーン不要にしたい)
+  # nix から供給する。lsp.lua の nil_ls はこのバイナリを使う。
   home.packages = [
     pkgs.neovim
     pkgs.gcc
     pkgs.gnumake
+    pkgs.nil
   ];
 
   xdg.configFile."nvim/init.lua".text = ''
@@ -483,6 +495,8 @@
         })
 
         -- Nix (flake inputsのfetch確認プロンプトを自動化)
+        -- masonのnilパッケージはcargoでソースビルドするため使わず、
+        -- neovim.nixのhome.packagesで入れたバイナリを直接使う。
         vim.lsp.config("nil_ls", {
           settings = {
             ["nil"] = {
@@ -490,13 +504,13 @@
             },
           },
         })
+        vim.lsp.enable("nil_ls")  -- mason管理外なので明示的に有効化
 
         -- サーバーを自動インストールし、インストール済みを自動有効化
         require("mason-lspconfig").setup({
           ensure_installed = {
             "lua_ls",  -- Lua
             "ts_ls",   -- TypeScript / JavaScript
-            "nil_ls",  -- Nix
           },
         })
 
@@ -570,21 +584,43 @@
   '';
 
   xdg.configFile."nvim/lua/plugins/treesitter.lua".text = ''
-    -- 🌳 Treesitter: 構文解析ベースのハイライト・インデント (kickstart.nvim流)
+    -- 🌳 Treesitter: 構文解析ベースのハイライト・インデント
+    -- masterブランチは2026-04にアーカイブ済みで、nvim 0.12ではmarkdownの
+    -- インジェクション処理が壊れる(node:range() が nil で落ちてハイライトが
+    -- 全滅する)ため、mainブランチ系のnixpkgs版を使う。
+    -- mainはAPIが別物: モジュールopts(highlight.enable等)は存在せず、
+    -- 有効化はバッファごとに vim.treesitter.start()。
+    -- プラグイン本体と全言語のビルド済みパーサーはnixが供給するので、
+    -- git cloneも:TSInstallも不要(オフラインで完結)。
     return {
-      "nvim-treesitter/nvim-treesitter",
-      branch = "master",  -- main(書き直し版)はAPIが別物のためmasterに固定
-      build = ":TSUpdate",
-      main = "nvim-treesitter.configs",
-      opts = {
-        ensure_installed = {
-          "bash", "c", "diff", "html", "lua", "luadoc",
-          "markdown", "markdown_inline", "query", "vim", "vimdoc",
-          "nix", "typescript", "tsx", "javascript", "json", "yaml",
-        },
-        auto_install = true,  -- 開いたファイルの言語を自動インストール
-        highlight = { enable = true },
-        indent = { enable = true },
+      {
+        dir = "${treesitter}",
+        name = "nvim-treesitter",
+        lazy = false,  -- lazy-load非対応(READMEに明記)
+        config = function()
+          -- ファイルを開いたら、パーサーがある言語はハイライト・インデントを有効化
+          vim.api.nvim_create_autocmd("FileType", {
+            group = vim.api.nvim_create_augroup("TreesitterStart", { clear = true }),
+            callback = function(ev)
+              local lang = vim.treesitter.language.get_lang(ev.match)
+              if not lang then
+                return
+              end
+              local ok, added = pcall(vim.treesitter.language.add, lang)
+              if not (ok and added) then
+                return
+              end
+              vim.treesitter.start(ev.buf, lang)
+              vim.bo[ev.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+            end,
+          })
+        end,
+      },
+      -- ビルド済みパーサー群(rtpで$VIMRUNTIME同梱の古いパーサーより優先させる)
+      {
+        dir = "${treesitterGrammars}",
+        name = "nvim-treesitter-grammars",
+        lazy = false,
       },
     }
   '';

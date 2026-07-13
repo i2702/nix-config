@@ -407,6 +407,21 @@ in
     -- ===================================
 
     return {
+      -- catppuccin はプラグイン本体を nix で供給する(実行時の git clone 不要)。
+      -- mocha をデフォルトに適用。:colorscheme catppuccin-latte / cyberdream 等で切替可。
+      {
+        dir = "${pkgs.vimPlugins.catppuccin-nvim}",
+        name = "catppuccin",
+        lazy = false,
+        priority = 1000,
+        config = function()
+          require("catppuccin").setup({
+            flavour = "mocha",
+          })
+          vim.cmd("colorscheme catppuccin-mocha")
+        end,
+      },
+      -- cyberdream は setup のみ行い適用しない(:colorscheme cyberdream で行き来する用)
       {
         "scottmckendry/cyberdream.nvim",
         lazy = false,
@@ -419,7 +434,6 @@ in
             borderless_telescope = true,
             terminal_colors = true,
           })
-          vim.cmd("colorscheme cyberdream")
         end,
       },
     }

@@ -57,8 +57,8 @@ in
       vim = "nvim";
       le = "less";
       gr = ''grep -rniE --color=auto --exclude-dir={node_modules,dist,build,.git} -C 2'';
-      cdg = "cd $(ghq list -p | fzf)";
-      cd-w = "gwq cd";
+      cg = "cd $(ghq list -p | fzf)";
+      cw = "gwq cd";
     } // lib.optionalAttrs pkgs.stdenv.isLinux {
       e = "explorer.exe";
       # WSL: Windows ネイティブの Zed で開く(za は既存ウィンドウに追加)

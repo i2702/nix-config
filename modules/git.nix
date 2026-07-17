@@ -58,6 +58,28 @@
 
   programs.git = {
     enable = true;
+
+    # git 2.55.0 は nixpkgs 未収録(master も 2.54.0)のため src を差し替えて先行導入する。
+    # nixpkgs が 2.55.0 に追従したらこの package 上書きごと削除する。
+    # overlay で pkgs.git 全体を上書きしない理由: gitMinimal 経由で fetch 系ツールチェーン
+    # (Python/cargo-vendor 等)が芋づる式にソースビルドになるため、ユーザー向け git に限定する。
+    package = pkgs.git.overrideAttrs (old: rec {
+      version = "2.55.0";
+      src = pkgs.fetchurl {
+        url = "https://www.kernel.org/pub/software/scm/git/git-${version}.tar.xz";
+        hash = "sha256-RX/bBNyHKOAH1GiGleaRLm9oByeSDypAvxHqzBdQU1c=";
+      };
+      # 2.54.0 向けの nixpkgs パッチのうち 2.55.0 で不要になったものを除外する:
+      # - t1517: 上流でテストが書き換わり当たらない(テスト専用なので除外で問題ない)
+      # - osxkeychain: 上流が GITLIBS += $(RUST_LIB) で同等の修正を取り込み済み
+      patches = builtins.filter
+        (p: !(lib.any (s: lib.hasSuffix s (baseNameOf p)) [
+          "expect-gui--askyesno-failure-in-t1517.patch"
+          "osxkeychain-link-rust_lib.patch"
+        ]))
+        (old.patches or [ ]);
+    });
+
     # name/email はこのマシン専用の ~/.config/git/config.local(リポジトリ管理外)で設定し、
     # 下部 settings の include.path 経由で読み込む(上の説明・存在チェック参照)。
 

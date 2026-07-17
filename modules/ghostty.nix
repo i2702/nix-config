@@ -3,6 +3,10 @@
   # Ghostty 本体は GUI アプリのため nix では管理せず(/Applications/Ghostty.app)、
   # 設定ファイル ~/.config/ghostty/config の配置のみ行う。
   xdg.configFile."ghostty/config".text = ''
+    # Ghostty 組み込みテーマ(+list-themes で確認可)。zed / neovim / delta と配色を統一。
+    # OS の外観に追従させたい場合は theme = light:Catppuccin Latte,dark:Catppuccin Mocha 形式。
+    theme = Catppuccin Mocha
+
     # フォント。HackGen Console NF (Nerd Font 版) を使用。
     font-family = HackGen Console NF
 

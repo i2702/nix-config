@@ -123,7 +123,12 @@ in
 
       ${wslOnly}
 
-      export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
+      # nixのパスも無条件でprependする。/etc/zshrc等の標準フックに任せないのは、
+      # ガード変数(__ETC_PROFILE_NIX_SOURCED)が環境系譜で一度しか効かず、
+      # herdr/tmux配下のネストしたログインシェルではpath_helperの並べ替えで
+      # /usr/binが先頭に戻り、Apple git等がnix供給版より優先されてしまうため。
+      export PATH="$HOME/bin:$HOME/.local/bin:$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
+      typeset -U path PATH
 
       # bun completions
       [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"

@@ -76,9 +76,6 @@
         }
       },
       "base_keymap": "VSCode",
-      "search": {
-        "include_ignored": true
-      },
       "use_smartcase_search": true,
       "current_line_highlight": "all",
       "cursor_blink": true,
@@ -104,6 +101,19 @@
         "mode": "system",
         "light": "Ayu Light",
         "dark": "Catppuccin Mocha",
+      },
+      "file_scan_exclusions": [
+        ".git",
+        ".DS_Store",
+        "Thumbs.db",
+      ],
+      "search": {
+        "button": false,
+        "whole_word": false,
+        "case_sensitive": false,
+        "include_ignored": false,
+        "regex": false,
+        "center_on_match": false
       },
     }
   '';

@@ -2,7 +2,22 @@
 {
   # herdr: AIエージェント時代のターミナルマルチプレクサ (https://herdr.dev)
   # パッケージは flake.nix の input (github:ogulcancelik/herdr) の overlay から供給。
-  home.packages = [ pkgs.herdr ];
+  #
+  # COPY MODE の ctrl-e / ctrl-y (vim 風の1行表示スクロール)は src パッチで追加している。
+  # COPY MODE 内のキーは上流でハードコードされていて config.toml では変更できないため
+  # (config で変えられるのは COPY MODE 開始キーのみ)。上流に入ったらパッチごと削除する。
+  # overlay 全体ではなくここで overrideAttrs する理由: パッチは利用パッケージ限定の
+  # 先行導入で、git.nix の src 差し替えと同じ「モジュール内で完結させる」方針に合わせる。
+  home.packages = [
+    (pkgs.herdr.overrideAttrs (old: {
+      # 素のパス参照にしない理由: flake 評価ではパスが flake ソース全体の store パス配下を
+      # 指すため、リポジトリ内のどのファイルを変更しても herdr の再ビルドが走ってしまう。
+      # builtins.path で単一ファイルとして取り込み、パッチ内容だけを drv の入力にする。
+      patches = (old.patches or [ ]) ++ [
+        (builtins.path { path = ./patches/herdr-copy-mode-ctrl-e-y.patch; })
+      ];
+    }))
+  ];
 
   xdg.configFile."herdr/config.toml".text = ''
     # herdr 設定 (https://herdr.dev/docs/configuration/)
@@ -44,6 +59,8 @@
     close_pane = "alt+q"
 
     # Alt-c でコピーモード開始。
+    # モード内キーは設定不可(ハードコード)。ctrl-e / ctrl-y の1行表示スクロールは
+    # src パッチ(patches/herdr-copy-mode-ctrl-e-y.patch)で追加している。
     copy_mode = "alt+c"
 
     # Alt-m で space 名変更。サイドバー見出しになる space 名は変更頻度が高い。

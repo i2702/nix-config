@@ -57,8 +57,9 @@ in
       vim = "nvim";
       le = "less";
       gr = ''grep -rniE --color=auto --exclude-dir={node_modules,dist,build,.git} -C 2'';
-      rg = ''rg -p'';
-      rgf = ''rg -p --files --iglob'';
+      # noglob: rg foo **/*.md のようにクォート無しで glob パターンを渡せるようにする
+      rg = ''noglob rg -p'';
+      rgf = ''noglob rg -p --files --iglob'';
       cg = "cd $(ghq list -p | fzf)";
       cw = "gwq cd";
     } // lib.optionalAttrs pkgs.stdenv.isLinux {

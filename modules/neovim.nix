@@ -227,6 +227,10 @@ in
     keymap("n", "gi", vim.lsp.buf.implementation, { desc = "実装へジャンプ" })
     keymap("n", "gt", vim.lsp.buf.type_definition, { desc = "型定義へジャンプ" })
     keymap("n", "gr", vim.lsp.buf.references, { desc = "参照一覧" })
+    -- gdでジャンプした後の戻る/進む(ジャンプリスト移動)
+    -- デフォルトのgh(Selectモード開始)は使わないので潰す
+    keymap("n", "gh", "<C-o>", { desc = "ジャンプ元へ戻る" })
+    keymap("n", "gl", "<C-i>", { desc = "ジャンプ先へ進む" })
     keymap("n", "K", vim.lsp.buf.hover, { desc = "ホバー情報" })
     keymap("n", "<C-.>", vim.lsp.buf.hover, { desc = "ホバー情報" })
     keymap("n", "<leader>ca", vim.lsp.buf.code_action, { desc = "コードアクション" })

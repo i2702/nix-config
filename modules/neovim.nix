@@ -3,9 +3,14 @@ let
   # nvim-treesitter はプラグイン本体もビルド済みパーサーも nix で供給する。
   # (lazy.nvim の git clone や実行時の :TSInstall によるビルドを不要にする)
   treesitter = pkgs.vimPlugins.nvim-treesitter.withAllGrammars;
+  # queries は各文法 derivation にも入っているが、それだけだと ecma / jsx /
+  # html_tags のように文法を持たない「クエリ専用の疑似言語」が落ちる。
+  # typescript の highlights.scm は `; inherits: ecma` で共通ルールを取り込むため、
+  # ecma が無いと import/const/文字列などが一切ハイライトされない。
+  # プラグイン本体の runtime/(= runtime/queries に全言語ぶん) を混ぜて補う。
   treesitterGrammars = pkgs.symlinkJoin {
     name = "nvim-treesitter-grammars";
-    paths = treesitter.dependencies;
+    paths = treesitter.dependencies ++ [ "${treesitter}/runtime" ];
   };
 in
 {

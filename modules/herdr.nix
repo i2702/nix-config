@@ -1,7 +1,7 @@
 { pkgs, lib, ... }:
 {
   # herdr: AIエージェント時代のターミナルマルチプレクサ (https://herdr.dev)
-  # パッケージは flake.nix の input (github:ogulcancelik/herdr) の overlay から供給。
+  # パッケージは flake.nix の input (github:herdrdev/herdr) の overlay から供給。
   #
   # COPY MODE の ctrl-e / ctrl-y (vim 風の1行表示スクロール)は src パッチで追加している。
   # COPY MODE 内のキーは上流でハードコードされていて config.toml では変更できないため

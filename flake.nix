@@ -8,8 +8,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # herdr は nixpkgs 未収録のため、公式リポジトリの flake から取得する
+    # (リポジトリは 2026-07-29 に ogulcancelik/herdr から herdrdev 組織へ移管された。
+    #  旧 URL は GitHub の 301 リダイレクト頼みになるので移管後の URL を直接指す)
     herdr = {
-      url = "github:ogulcancelik/herdr";
+      url = "github:herdrdev/herdr";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };

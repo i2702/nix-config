@@ -134,6 +134,18 @@
     command = "~/.config/herdr/scripts/focus-role.sh terminal"
     description = "ターミナル(非エージェント)ペインへフォーカス(タブ内で巡回)"
 
+    # Alt-b で herdr-browser プラグインのブラウザペインを右分割で開く。
+    # プラグイン本体は nix 管理外の命令的インストール(手順は MANUAL.md 参照)。
+    # placement に overlay ではなく split を選ぶ理由: overlay はセッションモーダルで他ペインを
+    # 操作できなくなるため、「エージェントがブラウザを操作しているのを見ながら別ペインで作業する」
+    # という使い方にならない。ペインなら Alt-h/j/k/l で行き来でき Alt-q で閉じられる。
+    # tab を選ばない理由は new_tab = "" でタブを実質無効化しているため(keys 参照)。
+    [[keys.command]]
+    key = "alt+b"
+    type = "shell"
+    command = '"''${HERDR_BIN_PATH:-herdr}" plugin pane open --plugin official.browser --entrypoint browser --placement split --direction right --focus'
+    description = "ブラウザペインを右分割で開く"
+
     [terminal]
     # 新規ペイン/タブはカレントディレクトリを引き継ぐ
     # follow は「起動時」ではなく「現在(cd 後)」のディレクトリを引き継ぐ。自動タイル分割の
@@ -156,6 +168,14 @@
     # タブが1つのときはタブバーを表示しない。new_tab 無効化(keys 参照)と合わせると
     # タブは常に1つなので、タブ UI が完全に見えなくなる
     hide_tab_bar_when_single_tab = true
+
+    [experimental]
+    # herdr-browser プラグイン(Alt-b)が Chromium の画面をペインへ描画するのに必要。
+    # herdr 側はまだ experimental 扱いで、有効化はブラウザペインだけでなく全ペインの
+    # Kitty graphics 処理に効く。端末側は Ghostty なのでプロトコルは対応済み。
+    # 描画コストが気になる場合は herdr 本体ではなくプラグイン側の browser.json で
+    # captureScale を下げる(HiDPI では画素数が支配的なため)。
+    kitty_graphics = true
   '';
 
   # 自動タイル分割スクリプト(Alt-v / Alt-s から呼ばれる)。

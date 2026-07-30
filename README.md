@@ -34,6 +34,9 @@ home-manager switch --flake .#linux
 nix run home-manager -- switch --flake .#mac   # または .#linux
 ```
 
+`switch` だけでは復元されない手動作業（herdr のブラウザプラグインなど）は
+[MANUAL.md](MANUAL.md) にまとめている。
+
 ---
 
 ## ディレクトリ構成
@@ -42,6 +45,7 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 .
 ├── flake.nix              # inputs (nixpkgs / home-manager / herdr) と 2 つの homeConfiguration
 ├── flake.lock             # 依存の固定
+├── MANUAL.md              # nix で宣言できない手動セットアップの記録
 ├── home.nix               # 共通設定・全モジュールの imports
 ├── hosts/
 │   ├── mac.nix            # macOS: username / homeDirectory

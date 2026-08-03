@@ -7,6 +7,17 @@ let
   # 引数なし(カレント)や相対パスは解決できない。
   zedWinCli = "/mnt/c/Users/m1205/AppData/Local/Programs/Zed/bin/Zed.exe --wsl m1205062@Ubuntu";
 
+  # 設定反映コマンド。カレントに依らず動くよう flake のパスを固定する。
+  # -b backup は必須。管理対象パスに実体ファイルが居座っていると activation の
+  # linkGeneration が中断し、ビルドは成功しているのに ~/.zshrc 等が古い世代を
+  # 指したまま放置される(症状: 追加したはずの alias が効かない)。
+  # -b があれば衝突ファイルを .backup へ退避して最後まで通る。
+  hmSwitch =
+    let
+      target = if pkgs.stdenv.isDarwin then "mac" else "linux";
+    in
+    "home-manager switch -b backup --flake ~/nix-config#${target}";
+
   # WSL(Windows側との連携)に依存する部分。Macでは無効化する。
   wslOnly = lib.optionalString pkgs.stdenv.isLinux ''
     # WSL clipboard (UTF-8 → Shift-JIS変換)
@@ -62,6 +73,7 @@ in
       rgf = ''noglob rg -p --files --iglob'';
       cg = "cd $(ghq list -p | fzf)";
       cw = "gwq cd";
+      hms = hmSwitch;
     } // lib.optionalAttrs pkgs.stdenv.isLinux {
       e = "explorer.exe";
       # WSL: Windows ネイティブの Zed で開く(za は既存ウィンドウに追加)

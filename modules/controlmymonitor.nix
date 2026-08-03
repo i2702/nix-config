@@ -23,12 +23,16 @@
   # `ControlMyMonitor.exe /GetValue BNQ809F 60` → 15、
   # `ControlMyMonitor.exe /GetValue DEL4276 60` → 27 と、
   # Mac 側の実測値がそのまま通用することを確認済み。
-  home.sessionVariables = {
-    # scoop install 先。ユーザー名(m1205)が変わる/別マシンの場合は要修正。
-    CMM_EXE = "/mnt/c/Users/m1205/scoop/apps/controlmymonitor/current/ControlMyMonitor.exe";
-  };
-
   programs.zsh.initContent = lib.mkOrder 1300 ''
+    # scoop install 先。ユーザー名(m1205)が変わる/別マシンの場合は要修正。
+    #
+    # home.sessionVariables ではなくここで直接定義しているのは、
+    # hm-session-vars.sh 側の「一度だけsourceする」ガード(__HM_SESS_VARS_SOURCED)
+    # のせいで、tmux 等の既存シェルから新しい zsh を起動した場合に環境変数が
+    # 引き継がれ、新規追加した変数が再読み込みされないため。initContent の
+    # 変数は .zshrc が読まれる対話シェル起動のたびに必ず再定義される。
+    CMM_EXE="/mnt/c/Users/m1205/scoop/apps/controlmymonitor/current/ControlMyMonitor.exe"
+
     # モニタ名 → Short Monitor ID。
     ddc-id() {
       case "$1" in

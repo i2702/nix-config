@@ -1,4 +1,9 @@
 {
+  # Mac でしか使わないモジュール。共通の home.nix ではなくここから import する。
+  imports = [
+    ../modules/m1ddc.nix
+  ];
+
   # Macの実際のログインユーザー名に合わせて調整すること(現時点では未確定のため
   # Linux側と同じ名前を仮置きしている)。
   home.username = "ayumi";

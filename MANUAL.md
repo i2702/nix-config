@@ -109,3 +109,40 @@ herdr server live-handoff --import-exe ~/.nix-profile/bin/herdr
 `templates/git-config.local.example` を `~/.config/git/config.local` にコピーして
 name / email を埋める。詳細は README の「セットアップ」を参照。
 これが無いと activation が失敗して停止する。
+
+---
+
+## m1ddc (ディスプレイ入力切り替え)
+
+`disp-win` / `disp-mac` / `m1ddc-probe` などの zsh 関数(`modules/m1ddc.nix`)が動くために必要。
+Mac 専用のため `hosts/mac.nix` からのみ import している。
+
+m1ddc は nixpkgs に無いので Homebrew で入れる。
+
+```bash
+brew install m1ddc
+```
+
+入っていない場合、関数は定義されるが実行時に `command not found: m1ddc` で失敗する。
+
+### 入力コードと UUID
+
+DDC の VCP コード(0x60)は機種ごとに値が違い、MCCS 標準表(0x0F〜0x12)とも一致しない。
+下記は実測値なので、モニタを入れ替えたら取り直す。
+
+| ディスプレイ | Mac | Win |
+|---|---|---|
+| DELL U3223QE | 17 | 27 |
+| BenQ RD320UA | 19 (USB-C) | 15 (DP) |
+
+`modules/m1ddc.nix` が持つ UUID もこの2台に紐づく。別のモニタでは
+`m1ddc display list detailed` で取り直す。
+
+### この環境固有の制約
+
+- Win 機は BenQ を Win 入力として掴むまで DELL へ出力しない。`disp-win` が BenQ を
+  先に切り替えて5秒待つのはこのため
+- DDC 読み取りは4〜5割が失敗し、ディスプレイ固有の固定値(DELL=110 / BenQ=0)を返す。
+  `m1ddc-probe` が複数回読んで分布を出すのはこのため。書き込み側は取りこぼしが少ない
+- DELL は信号の無い入力でも選択状態を保持し続けるので、読み戻しからは信号の有無を
+  判別できない。入力コードの特定は最終的に目視で行う

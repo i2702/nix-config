@@ -34,6 +34,13 @@ let
 
     export PATH="/snap/bin:$PATH"
 
+    # WSL の systemd=true では appendWindowsPath で足されるはずの Windows 側
+    # ディレクトリがユーザーセッションに渡らない。explorer.exe / clip.exe /
+    # shutdown.exe / powershell.exe が名前で引けなくなるため自前で足す。
+    # 末尾に置いて Linux 側のコマンドを優先させる(find や sort が .exe に
+    # 取られると壊れるため)。
+    export PATH="$PATH:/mnt/c/Windows/System32:/mnt/c/Windows:/mnt/c/Windows/System32/WindowsPowerShell/v1.0"
+
     # Workaround to prevent Claude Code from repeatedly spawning powershell.exe.
     # ref: https://github.com/anthropics/claude-code/issues/14352
     export CLAUDE_CODE_SKIP_WINDOWS_PROFILE=1
@@ -76,6 +83,12 @@ in
       hms = hmSwitch;
     } // lib.optionalAttrs pkgs.stdenv.isLinux {
       e = "explorer.exe";
+      # WSL から Windows 本体を落とす/再起動する。.exe を付けないと Linux 側の
+      # /sbin/shutdown が当たるため必ず付ける。/t 60 は取り消し猶予で、
+      # 誤って叩いても winabort で止められる。WSL のディストリも一緒に終了する。
+      winoff = "shutdown.exe /s /t 60";
+      winreboot = "shutdown.exe /r /t 60";
+      winabort = "shutdown.exe /a";
       # WSL: Windows ネイティブの Zed で開く(za は既存ウィンドウに追加)
       z = zedWinCli;
       za = "${zedWinCli} -a";

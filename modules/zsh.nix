@@ -41,6 +41,39 @@ let
     # 取られると壊れるため)。
     export PATH="$PATH:/mnt/c/Windows/System32:/mnt/c/Windows:/mnt/c/Windows/System32/WindowsPowerShell/v1.0"
 
+    # WSL_INTEROP を生きているソケットに繋ぎ直す(上の PATH 問題と根本原因は同じ)。
+    #
+    # systemd=true ではユーザーのシェルが login 経由で起動し wsl.exe の子孫に
+    # ならないため、WSL_INTEROP が渡ってこない。この変数が無いと /init は
+    # ディストロ初回起動時の interop(/run/WSL/1_interop)にフォールバックし、
+    # そこから起動した Windows プロセスは Session 0(サービス用の非対話セッション)
+    # で動く。Session 0 にはデスクトップが無く、実ディスプレイも見えない
+    # (1024x768 の "WinDisc" 擬似ディスプレイのみ)。
+    # 症状: ControlMyMonitor がモニタを1台も列挙できず、disp-win / disp-mac が
+    # エラーも出さずに何もしなくなる(modules/controlmymonitor.nix)。
+    #
+    # wsl.exe から開かれたセッションのソケット(<pid>_interop)は Session 1 に
+    # 属するので、そちらを拾う。ソケットは接続元の端末を閉じると消えるため、
+    # 効かなくなったら手で wsl-interop-refresh を叩き直せばよい。
+    wsl-interop-refresh() {
+      [[ -S "$WSL_INTEROP" ]] && return 0
+
+      # 1_interop は初回起動時のもの = Session 0。実体(2_interop 等)ごと除外する。
+      local fallback="$(readlink -f /run/WSL/1_interop 2>/dev/null)"
+      local sock pid
+      # (=Nom): ソケットのみ / 無ければ空 / 新しい順。symlink は lstat で弾かれる。
+      for sock in /run/WSL/*_interop(=Nom); do
+        [[ -n "$fallback" && "$sock" == "$fallback" ]] && continue
+        # 名前の pid が生きているものだけが有効。閉じた端末の残骸を掴まない。
+        pid="''${sock:t}"
+        [[ -d "/proc/''${pid%%_*}" ]] || continue
+        export WSL_INTEROP="$sock"
+        return 0
+      done
+      return 1
+    }
+    wsl-interop-refresh
+
     # Workaround to prevent Claude Code from repeatedly spawning powershell.exe.
     # ref: https://github.com/anthropics/claude-code/issues/14352
     export CLAUDE_CODE_SKIP_WINDOWS_PROFILE=1

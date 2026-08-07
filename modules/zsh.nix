@@ -198,6 +198,9 @@ in
       export BUN_INSTALL="$HOME/.bun"
       export PATH="$BUN_INSTALL/bin:$PATH"
 
+      # rust (rustup 本体と cargo install したバイナリ)
+      export PATH="$HOME/.cargo/bin:$PATH"
+
       # vp node
       [ -f "$HOME/.vite-plus/env" ] && . "$HOME/.vite-plus/env"
 

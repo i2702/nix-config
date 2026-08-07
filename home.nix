@@ -26,6 +26,7 @@
     ./modules/gwq.nix
     ./modules/fzf.nix
     ./modules/lazygit.nix
+    ./modules/mdp.nix
     ./modules/alacritty.nix
     ./modules/ghostty.nix
     ./modules/zed.nix

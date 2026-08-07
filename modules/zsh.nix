@@ -198,8 +198,11 @@ in
       export BUN_INSTALL="$HOME/.bun"
       export PATH="$BUN_INSTALL/bin:$PATH"
 
-      # rust (rustup 本体と cargo install したバイナリ)
-      export PATH="$HOME/.cargo/bin:$PATH"
+      # cargo install したバイナリ (zellij 等)。ツールチェーン本体は nix が
+      # 供給する (modules/rust.nix)。先頭に足さないのは、WSL に rustup の
+      # shim (~/.cargo/bin/cargo 等) が残っており、prepend すると nix 供給版
+      # より優先されてしまうため。末尾なら cargo install 分だけが有効になる。
+      export PATH="$PATH:$HOME/.cargo/bin"
 
       # vp node
       [ -f "$HOME/.vite-plus/env" ] && . "$HOME/.vite-plus/env"

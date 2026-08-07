@@ -6,8 +6,14 @@
   # hms (home-manager switch) や cd から ~/nix-config で届くようにする。
   # mkOutOfStoreSymlink: nix store のコピーではなく作業ツリーを直接指すため、
   # 編集 → switch のループがそのまま回る。
+  # パスをハードコードしないのは、ghq root がホストごとに違うため
+  # (linux: ~/reporepo, mac: ~/Repository)。hosts/*.nix の設定から導出する。
   home.file."nix-config".source =
-    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/reporepo/github.com/i2702/nix-config";
+    let
+      ghqRoot = builtins.replaceStrings [ "~" ] [ config.home.homeDirectory ]
+        config.programs.git.settings.ghq.root;
+    in
+    config.lib.file.mkOutOfStoreSymlink "${ghqRoot}/github.com/i2702/nix-config";
 
   home.packages = with pkgs; [
     ripgrep

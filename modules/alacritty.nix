@@ -15,6 +15,25 @@ let
   # ファイル監視がネットワークパス上で効かない問題も起きない。
   winAlacrittyDir = "/mnt/c/Users/m1205/AppData/Roaming/alacritty";
 
+  # Windows の Win(Super)ショートカットを押すと、端末に文字が混入する問題への対処。
+  # 例: Win-V(クリップボード履歴)を押すと、履歴から選んだ文字列がペーストされる前に
+  # "v" が入力される。Alacritty はバインドに一致しないキーをそのまま文字として PTY へ
+  # 書き込む仕様で、Super 修飾は文字生成に影響しないため "v" が素通りするのが原因。
+  # 一致するバインドが1つでもあると Alacritty は文字送出を抑制する(ReceiveChar を除く)ので、
+  # 何もしない action = "None" を置いて潰す。バインドの照合はキーシーケンス構築より前に
+  # 走るため、kitty keyboard protocol の有効/無効(herdr が有効化する)に関わらず効く。
+  # Windows 側のショートカット動作自体は OS が処理するので、履歴からのペーストは
+  # Ctrl-V 送出として届き、下の Paste バインドで従来どおり機能する。
+  # Alacritty にワイルドカード指定が無いため、英数字36個を列挙して生成する。
+  superSuppressedKeys = lib.stringToCharacters "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  superSuppressBindings = lib.concatMapStrings (key: ''
+
+    [[keyboard.bindings]]
+    key = "${key}"
+    mods = "Super"
+    action = "None"
+  '') superSuppressedKeys;
+
   configFile = pkgs.writeText "alacritty.toml" ''
     # このファイルは nix (home-manager) の生成物。直接編集しても switch で上書きされる。
     # 変更は ~/nix-config/modules/alacritty.nix を編集して home-manager switch する。
@@ -40,6 +59,9 @@ let
     key = "V"
     mods = "Control"
     action = "Paste"
+
+    # Win(Super)+英数字は文字を送出させない(理由は modules/alacritty.nix 参照)
+    ${superSuppressBindings}
   '';
 in
 {

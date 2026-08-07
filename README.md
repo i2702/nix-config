@@ -55,7 +55,7 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 │   ├── git.nix  gh.nix  lazygit.nix
 │   ├── neovim.nix  vim.nix
 │   ├── herdr.nix          # ターミナルマルチプレクサ（自動起動）
-│   └── ghostty.nix  alacritty.nix
+│   └── ghostty.nix  alacritty.nix  wezterm.nix
 └── templates/
     └── git-config.local.example   # git identity のテンプレート
 ```
@@ -106,6 +106,7 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 | --- | --- | --- |
 | [Ghostty](https://ghostty.org) | macOS | 本体は GUI アプリ（nix 管理外）、設定のみ配置。`macos-option-as-alt` 有効、ネイティブタブは herdr のワークスペース切替と競合するため無効化 |
 | Alacritty | WSL | Windows 側アプリが `wsl.exe` 経由で Ubuntu を起動。設定ファイルのみ配置 |
+| [WezTerm](https://wezterm.org) | WSL | 同じく Windows 側アプリ（nix 管理外）。WSL ドメイン `WSL:Ubuntu` で Ubuntu を起動。設定（Lua）のみ `%USERPROFILE%\.wezterm.lua` へ配置 |
 
 ### CLI ユーティリティ
 | 技術 | 用途 |
@@ -126,7 +127,7 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 | --- | --- | --- |
 | homeConfiguration | `.#mac` | `.#linux` |
 | ユーザー / ホーム | `ayumi` / `/Users/ayumi` | `m1205062` / `/home/m1205062` |
-| ターミナルエミュレータ | Ghostty | Alacritty（Windows 側から `wsl.exe` 起動） |
+| ターミナルエミュレータ | Ghostty | Alacritty / WezTerm（いずれも Windows 側アプリから Ubuntu を起動） |
 | クリップボード | macOS ネイティブ | `clip.exe` + `nkf`（UTF-8 → Shift-JIS）でラップ |
 | エディタ起動 | `zed` = `Zed.app` 同梱 CLI を直接指定 | `e` = `explorer.exe` |
 | herdr space 切替 | `cmd` 系キー（macOS では cmd が herdr まで届く） | — |
@@ -145,7 +146,7 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 - **Ghostty**（`modules/ghostty.nix`）: `macos-option-as-alt` で Option を Alt として送出（herdr の Alt バインド用）。ネイティブタブ・split 系キー（`cmd+t` / `cmd+[` / `cmd+]` など）は herdr のワークスペース切替と競合するため `unbind`。
 - **Zed CLI**: macOS では `zed` が PATH に無いため、`z` / `za` エイリアスを `Zed.app` 同梱 CLI の絶対パスに割り当て。
 
-> `modules/alacritty.nix` は Linux（WSL）でのみ、`modules/ghostty.nix` は Darwin でのみ配置される。
+> `modules/alacritty.nix` と `modules/wezterm.nix` は Linux（WSL）でのみ、`modules/ghostty.nix` は Darwin でのみ配置される。
 
 ---
 
@@ -158,4 +159,4 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 | `~/.config/git/config.local` | git identity（name / email）。**必須**（無いと activation が失敗） |
 | `~/.zshrc.local` | このマシン専用の zsh 設定 |
 | `~/.config/nvim/init.lua.local` | このマシン専用の Neovim 設定 |
-| `~/.vimrc.local` / `~/.alacritty.toml.local` | 同上（各ツール） |
+| `~/.vimrc.local` / `~/.alacritty.toml.local` / `~/.wezterm.local.lua` | 同上（各ツール）。Alacritty / WezTerm は Windows アプリなので `~` は `%USERPROFILE%` |

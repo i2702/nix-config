@@ -18,4 +18,26 @@
     rustfmt # cargo fmt
     clippy # cargo clippy
   ];
+
+  # mac では neovim.nix が入れる pkgs.gcc が PATH 上の cc を握るが、
+  # nix の gcc は macOS SDK のライブラリパスを知らないため、rustc の
+  # リンク段階で `ld: library not found for -liconv` の形で失敗する
+  # (aws-lc-sys 等の C 依存を含むクレートで顕在化)。cargo 側で
+  # Apple clang を明示してこれを回避する。
+  #
+  # gcc 側を直さない理由: gcc は telescope-fzf-native 等のビルド用で、
+  # 用途ごとに正しいコンパイラが違う。PATH の順序で解決しようとすると
+  # どちらかが壊れる。
+  #
+  # 全設定を aarch64-apple-darwin にスコープしてあるので、このファイルを
+  # linux ホストに置いても無害 (linux の cc→gcc は正常に動く)。
+  # CC_<target> 形式は cc クレートが CC より優先して参照する変数。
+  home.file.".cargo/config.toml".text = ''
+    [env]
+    CC_aarch64_apple_darwin = "/usr/bin/clang"
+    CXX_aarch64_apple_darwin = "/usr/bin/clang++"
+
+    [target.aarch64-apple-darwin]
+    linker = "/usr/bin/clang"
+  '';
 }

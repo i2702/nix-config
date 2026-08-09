@@ -214,6 +214,17 @@ in
     keymap("v", "J", ":m '>+1<CR>gv=gv", { desc = "選択行を下へ" })
     keymap("v", "K", ":m '<-2<CR>gv=gv", { desc = "選択行を上へ" })
 
+    -- 💬 Ctrl-/ でコメントトグル(nvim 0.10+ 組み込みの gc/gcc へ委譲)
+    -- Comment.nvim や mini.comment を入れないのは、組み込み版が treesitter の
+    -- language injection を見て commentstring を引くため(混在ファイルで正しい記号を選ぶ)。
+    -- 端末により 0x1F(<C-_>) と kitty keyboard protocol の <C-/> のどちらが届くかが
+    -- 変わる(herdrは後者を有効化する)ため、両方を受ける。
+    -- remap=true は必須: gcc/gc 自体がデフォルトマッピングなので noremap だと空振りする。
+    keymap("n", "<C-_>", "gcc", { remap = true, desc = "行コメントトグル" })
+    keymap("n", "<C-/>", "gcc", { remap = true, desc = "行コメントトグル" })
+    keymap("x", "<C-_>", "gc",  { remap = true, desc = "選択範囲をコメントトグル" })
+    keymap("x", "<C-/>", "gc",  { remap = true, desc = "選択範囲をコメントトグル" })
+
     -- 🗂️ ファイルエクスプローラー(neo-tree)
     keymap("n", "<leader>e", "<cmd>Neotree toggle<CR>", { desc = "ファイルツリー開閉" })
     keymap("n", "<leader>o", "<cmd>Neotree focus<CR>", { desc = "ファイルツリーにフォーカス" })

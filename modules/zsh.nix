@@ -111,7 +111,6 @@ in
       # noglob: rg foo **/*.md のようにクォート無しで glob パターンを渡せるようにする
       rg = ''noglob rg -p'';
       rgf = ''noglob rg -p --files --iglob'';
-      cg = "cd $(ghq list -p | fzf)";
       cw = "gwq cd";
       hms = hmSwitch;
     } // lib.optionalAttrs pkgs.stdenv.isLinux {
@@ -171,6 +170,15 @@ in
         else
           bat "$@"
         fi
+      }
+
+      # ghq 管理下のリポジトリを fzf で選んで移動する。
+      # alias の `cd $(ghq list -p | fzf)` にしないのは、fzf をキャンセルすると
+      # コマンド置換が空になり、引数なしの cd = ホーム移動になってしまうため。
+      cg() {
+        local dir
+        dir="$(ghq list -p | fzf)" || return
+        [[ -n "$dir" ]] && cd "$dir"
       }
 
       # 空Enterでls実行

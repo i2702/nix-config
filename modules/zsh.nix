@@ -18,6 +18,23 @@ let
     in
     "home-manager switch -b backup --flake ~/nix-config#${target}";
 
+  # $BROWSER の実体。WSL から Windows の既定ブラウザで URL を開く。
+  wslOpenUrl = pkgs.writeShellApplication {
+    name = "wsl-open-url";
+    text = ''
+      url="''${1:?URL を指定してください}"
+
+      # url.dll,FileProtocolHandler は URL を既定ハンドラ(= 既定ブラウザ)へ
+      # 渡すための Windows の口。rundll32 はコマンドラインを cmd に通さず、
+      # カンマ以降をそのまま 1 引数として扱うので、URL 中の & や % が
+      # 壊れない(cmd.exe /c start だと & を ^& に自前で逃がす必要がある)。
+      #
+      # explorer.exe "$url" は使わない。URL を URL として解釈せず、既定の
+      # フォルダ(ドキュメント)をエクスプローラーで開いてしまう。
+      /mnt/c/Windows/System32/rundll32.exe url.dll,FileProtocolHandler "$url"
+    '';
+  };
+
   # WSL(Windows側との連携)に依存する部分。Macでは無効化する。
   wslOnly = lib.optionalString pkgs.stdenv.isLinux ''
     # WSL clipboard (UTF-8 → Shift-JIS変換)
@@ -74,6 +91,19 @@ let
     }
     wsl-interop-refresh
 
+    # ブラウザ起動は Windows 側に投げる。
+    #
+    # webbrowser crate や xdg-open は「$BROWSER → xdg の既定ブラウザ設定 →
+    # デスクトップ環境別(WSL なら cmd.exe /c start)」の順に試す。ところが
+    # WSL 内に Linux 版 Chrome が入っていると 2 段目で拾われてしまう
+    # (xdg-settings get default-web-browser → com.google.Chrome.desktop)。
+    # SSH ログイン(= WezTerm の既定ドメイン)には WSLg の $DISPLAY が渡らない
+    # ので、その Chrome は "Missing X server or $DISPLAY" で即死する。
+    # 呼び出し側は spawn が通った時点で成功と見なすため、エラーも出ずに
+    # ブラウザだけ開かないという症状になる(aoao の o キー)。
+    # 最優先で見られる $BROWSER を埋めて、xdg 段階に落ちる前に決着させる。
+    export BROWSER="wsl-open-url %s"
+
     # Workaround to prevent Claude Code from repeatedly spawning powershell.exe.
     # ref: https://github.com/anthropics/claude-code/issues/14352
     export CLAUDE_CODE_SKIP_WINDOWS_PROFILE=1
@@ -84,7 +114,10 @@ let
   '';
 in
 {
-  home.packages = lib.optionals pkgs.stdenv.isLinux [ pkgs.nkf ];
+  home.packages = lib.optionals pkgs.stdenv.isLinux [
+    pkgs.nkf
+    wslOpenUrl
+  ];
 
   programs.zsh = {
     enable = true;

@@ -34,7 +34,6 @@
     ./modules/lazygit.nix
     ./modules/mdp.nix
     ./modules/rust.nix
-    ./modules/alacritty.nix
     ./modules/wezterm.nix
     ./modules/ghostty.nix
     ./modules/zed.nix

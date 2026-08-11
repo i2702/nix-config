@@ -7,10 +7,10 @@ let
   # 置き場所: Windows版 WezTerm の設定探索順は
   #   %WEZTERM_CONFIG_FILE% → exe と同じディレクトリ → %USERPROFILE%\.config\wezterm\wezterm.lua
   #   → %USERPROFILE%\.wezterm.lua
-  # で、WSL側の ~/.config は読まれない。よって alacritty.nix と同じく、生成物を activation で
-  # Windows のパスへ直接書き出す。UNC(\\wsl.localhost\...)経由にしない理由も同じで、home.file が
-  # 張るのは nix store への symlink であり、リンク先が Linux の絶対パスなので Windows 側から
-  # 辿れない。直接書き出しなら 9P を経由しないため、WezTerm の設定自動リロード
+  # で、WSL側の ~/.config は読まれない。よって生成物を activation で Windows のパスへ直接
+  # 書き出す。UNC(\\wsl.localhost\...)経由にしない理由は、home.file が張るのは nix store への
+  # symlink であり、リンク先が Linux の絶対パスなので Windows 側から辿れないため。
+  # 直接書き出しなら 9P を経由しないため、WezTerm の設定自動リロード
   # (automatically_reload_config)のファイル監視もそのまま効く。
   winHome = "/mnt/c/Users/m1205";
 
@@ -60,7 +60,7 @@ let
     config.font_size = 15
 
     -- ウィンドウ分割やタブは tmux 側で行うため、WezTerm のタブバーは場所を取るだけ。
-    -- 単一タブのときは隠して Alacritty と同じ見た目にする。
+    -- 単一タブのときは隠す。
     config.hide_tab_bar_if_only_one_tab = true
 
     config.keys = {
@@ -70,7 +70,7 @@ let
     -- Windows の Win(Super)ショートカットを押すと、端末に文字が混入する問題への対処。
     -- 例: Win-V(クリップボード履歴)を押すと、履歴から選んだ文字列がペーストされる前に
     -- "v" が入力される。バインドに一致しないキーはそのまま文字として PTY へ書き込まれ、
-    -- Super 修飾は文字生成に影響しないため素通りするのが原因(経緯は alacritty.nix 参照)。
+    -- Super 修飾は文字生成に影響しないため素通りするのが原因。
     -- 何もしない Nop を割り当てて潰す。SUPER+英数字には既定バインド(SUPER-c=Copy、
     -- SUPER-t=SpawnTab、SUPER-1..9=タブ切替 など)があるが、Windows では Win+英数字は
     -- OS のショートカットに奪われて WezTerm まで届かないため、潰しても実質失うものは無い。

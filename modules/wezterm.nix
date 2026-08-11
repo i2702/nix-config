@@ -22,9 +22,31 @@ let
     local act = wezterm.action
     local config = wezterm.config_builder()
 
-    -- WSL の Ubuntu を既定の接続先にする。wsl.exe を default_prog で直接起動する手もあるが
-    -- (Alacritty はそうしている)、ドメインにしておくと新しいタブやペインも同じ Ubuntu 上で
-    -- 開き、カレントディレクトリも引き継がれる。
+    -- WSL の Ubuntu を既定の接続先にする。ただし wsl.exe は使わず SSH で入る。
+    -- wsl.exe を起動すると間に Windows の ConPTY が挟まり、ConPTY が Kitty graphics の
+    -- APC シーケンス(ESC _G ...)を捨てるため、端末画像が一切表示できない。
+    -- SSH なら ConPTY を通らず、WezTerm 自身が端末エミュレーションを行うので画像が通る。
+    -- 上流でも未解決の既知問題で、回避策として wezterm ssh が案内されている(wezterm#1673)。
+    -- 実測と手順は reporepo/github.com/i2702/aoao/WEZTERM.md を参照。
+    config.ssh_domains = {
+      {
+        name = 'WSL:SSH',
+        -- localhost と書くと ::1 に先に解決されるが、networkingMode=Mirrored では
+        -- Windows → WSL の IPv6 ループバックが通らず、バナー待ちでタイムアウトする。
+        -- IPv4 で明示する。
+        remote_address = '127.0.0.1:2222',
+        username = 'm1205062',
+        -- 既定の 'WezTerm' はリモートに wezterm-mux-server を立てる方式で、画像の扱いに
+        -- 難がある(wezterm#1237)。素の SSH 接続にする。
+        multiplexing = 'None',
+        assume_shell = 'Posix',
+        ssh_option = { identityfile = wezterm.home_dir .. '/.ssh/id_ed25519' },
+      },
+    }
+    config.default_domain = 'WSL:SSH'
+
+    -- SSH で入れないとき(WSL 未起動、sshd 停止、鍵の入れ替え中など)の逃げ道として残す。
+    -- 使うときは Windows 側から wezterm start --domain WSL:Ubuntu と叩く。
     -- default_cwd を省くと Windows 側のカレント(/mnt/c/...)で開くので明示する。
     config.wsl_domains = {
       {
@@ -33,7 +55,6 @@ let
         default_cwd = '~',
       },
     }
-    config.default_domain = 'WSL:Ubuntu'
 
     config.font = wezterm.font 'HackGen Console NF'
     config.font_size = 15

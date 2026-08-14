@@ -673,6 +673,8 @@ in
           { "<leader>c", group = "🔧 コード" },
           { "<leader>r", group = "✏️ リネーム" },
           { "<leader>h", group = "🌿 Git hunk" },
+          { "<leader>g", group = "🌿 Git" },
+          { "<leader>gd", group = "差分基準" },
           { "<leader>s", group = "🔡 Surround" },
         },
       },
@@ -706,6 +708,17 @@ in
           map("n", "<leader>hs", gs.stage_hunk, "hunkをステージ")
           map("n", "<leader>hr", gs.reset_hunk, "hunkをリセット")
           map("n", "<leader>hb", gs.blame_line, "行のblame表示")
+
+          -- 差分基準の切替
+          map("n", "<leader>gdm", function()
+            local base = vim.fn.systemlist("git merge-base origin/develop HEAD")[1]
+            if vim.v.shell_error ~= 0 then
+              vim.notify("merge-base取得に失敗: " .. (base or ""), vim.log.levels.ERROR)
+              return
+            end
+            gs.change_base(base, true)
+          end, "PR差分モード(develop基準)")
+          map("n", "<leader>gdi", function() gs.change_base(nil, true) end, "index基準に戻す")
         end,
       },
     }

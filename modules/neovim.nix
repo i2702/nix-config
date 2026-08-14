@@ -72,6 +72,11 @@ in
     opt.cursorline = true          -- カーソル行を強調
     opt.wrap = true                -- 折り返し有効
     opt.breakindent = true         -- 折り返し時のインデント保持
+    -- wrap有効時に smoothscroll を off のままにしない。off だと画面最上段に
+    -- バッファ行の途中を置けず、<C-e>/<C-y> が画面行ではなくバッファ行単位でしか
+    -- 動けない。画面高より長く折り返す行が最終バッファ行になるとスクロール下限に
+    -- 達して <C-e> が完全な no-op になり、その行の後半が閲覧不能になる。
+    opt.smoothscroll = true        -- 折り返し行の途中でスクロールを止められる
     opt.showmatch = true           -- 対応括弧ハイライト
     opt.matchtime = 1              -- 括弧ハイライト時間
 

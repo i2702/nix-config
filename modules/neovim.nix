@@ -214,6 +214,16 @@ in
     keymap("v", "J", ":m '>+1<CR>gv=gv", { desc = "選択行を下へ" })
     keymap("v", "K", ":m '<-2<CR>gv=gv", { desc = "選択行を上へ" })
 
+    -- 🔢 行番号を入力してジャンプ (goto Line)
+    keymap("n", "gL", function()
+      vim.ui.input({ prompt = "行番号: " }, function(input)
+        local n = tonumber(input)
+        if not n then return end
+        n = math.max(1, math.min(n, vim.api.nvim_buf_line_count(0)))
+        vim.api.nvim_win_set_cursor(0, { n, 0 })
+      end)
+    end, { desc = "行番号を入力してジャンプ" })
+
     -- 💬 Ctrl-/ でコメントトグル(nvim 0.10+ 組み込みの gc/gcc へ委譲)
     -- Comment.nvim や mini.comment を入れないのは、組み込み版が treesitter の
     -- language injection を見て commentstring を引くため(混在ファイルで正しい記号を選ぶ)。

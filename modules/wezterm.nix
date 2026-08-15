@@ -63,8 +63,26 @@ let
     -- 単一タブのときは隠す。
     config.hide_tab_bar_if_only_one_tab = true
 
+    -- Kitty keyboard protocol。WezTerm の既定は無効。無効だと修飾キーが伝統的な
+    -- 制御文字に潰れ、アプリ側で Ctrl+Enter と素の Enter、Ctrl+Shift+/ と Ctrl+/ を
+    -- 区別できない(潰れた先がアプリの知らないコードなら、そもそも無反応になる)。
+    -- aoao の投稿(Ctrl+Enter)とキー一覧(Ctrl+Shift+/)がこれを必要とする。
+    -- 詳細は reporepo/github.com/i2702/aoao/WEZTERM.md を参照。
+    config.enable_kitty_keyboard = true
+
     config.keys = {
       { key = 'v', mods = 'CTRL', action = act.PasteFrom 'Clipboard' },
+
+      -- Ctrl+/ と Ctrl+Shift+/ を kitty keyboard protocol の形で送る。
+      -- この環境の WezTerm は Ctrl 修飾が付いた '/' のキー解決を誤り、
+      -- Ctrl+/ を codepoint 45('-')として、Ctrl+Shift+/ に至っては protocol を
+      -- 通さず伝統的な 0x7F(DEL)として送る。どちらもアプリ側で '/' と判らない
+      -- (実測は keyprobe による。Ctrl+Enter は正しく送られるので protocol 自体は効いている)。
+      -- レイアウトに左右されない物理キーで捕まえて、'/'(47)を含む CSI u を直接送る。
+      -- 末尾の数字は修飾キーで 5 = Ctrl、6 = Ctrl+Shift。
+      -- aoao の検索窓(Ctrl+/)とキー一覧(Ctrl+Shift+/)がこれを見る。
+      { key = 'phys:Slash', mods = 'CTRL', action = act.SendString '\x1b[47;5u' },
+      { key = 'phys:Slash', mods = 'CTRL|SHIFT', action = act.SendString '\x1b[47;6u' },
     }
 
     -- Windows の Win(Super)ショートカットを押すと、端末に文字が混入する問題への対処。

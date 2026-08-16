@@ -63,24 +63,30 @@ let
     -- 単一タブのときは隠す。
     config.hide_tab_bar_if_only_one_tab = true
 
-    -- Kitty keyboard protocol。WezTerm の既定は無効。無効だと修飾キーが伝統的な
-    -- 制御文字に潰れ、アプリ側で Ctrl+Enter と素の Enter、Ctrl+Shift+/ と Ctrl+/ を
-    -- 区別できない(潰れた先がアプリの知らないコードなら、そもそも無反応になる)。
-    -- aoao の投稿(Ctrl+Enter)とキー一覧(Ctrl+Shift+/)がこれを必要とする。
+    -- Kitty keyboard protocol は有効にしない(config.enable_kitty_keyboard は既定の無効のまま)。
+    -- 有効にすると ATOK で確定した文字が「1文字のときだけ」消える。protocol が有効だと
+    -- WezTerm は入力を文字列としてではなくキーイベントとしてエンコードして送るため、
+    -- 1文字の確定が単一の文字キーへ正規化されて CSI u に化け、アプリに文字として届かない
+    -- (2文字以上の確定は文字列のまま通るので消えない。この非対称が切り分けの決め手だった)。
+    -- そもそもこの版はキー解決自体が壊れており(下の '/' の項を参照)、WezTerm の正式リリースは
+    -- 20240203 で止まっているため上流の修正も待てない。
+    --
+    -- 代わりに、aoao が必要とするキーだけ CSI u を SendString で直接送る。protocol を切っても
+    -- アプリ側は CSI u を解釈するので、日本語入力と Ctrl 系キーは両立する(実測)。
     -- 詳細は reporepo/github.com/i2702/aoao/WEZTERM.md を参照。
-    config.enable_kitty_keyboard = true
-
     config.keys = {
       { key = 'v', mods = 'CTRL', action = act.PasteFrom 'Clipboard' },
 
-      -- Ctrl+/ と Ctrl+Shift+/ を kitty keyboard protocol の形で送る。
-      -- この環境の WezTerm は Ctrl 修飾が付いた '/' のキー解決を誤り、
-      -- Ctrl+/ を codepoint 45('-')として、Ctrl+Shift+/ に至っては protocol を
-      -- 通さず伝統的な 0x7F(DEL)として送る。どちらもアプリ側で '/' と判らない
-      -- (実測は keyprobe による。Ctrl+Enter は正しく送られるので protocol 自体は効いている)。
-      -- レイアウトに左右されない物理キーで捕まえて、'/'(47)を含む CSI u を直接送る。
-      -- 末尾の数字は修飾キーで 5 = Ctrl、6 = Ctrl+Shift。
-      -- aoao の検索窓(Ctrl+/)とキー一覧(Ctrl+Shift+/)がこれを見る。
+      -- aoao が見るキーを kitty keyboard protocol の形に組み立てて送る。
+      -- 書式は CSI <codepoint>;<修飾> u で、修飾は 5 = Ctrl、6 = Ctrl+Shift。
+      --   Ctrl+Enter(13)      = 投稿
+      --   Ctrl+/(47)          = 検索窓
+      --   Ctrl+Shift+/(47)    = キー一覧
+      -- '/' だけ物理キー指定にするのは、この環境の WezTerm が Ctrl 修飾の付いた '/' の
+      -- キー解決を誤るため。Ctrl+/ は codepoint 45('-')として、Ctrl+Shift+/ に至っては
+      -- protocol を通さず伝統的な 0x7F(DEL)として送られ、どちらもアプリ側で '/' と判らない
+      -- (実測は keyprobe による)。物理キーならレイアウトにも左右されない。
+      { key = 'Enter', mods = 'CTRL', action = act.SendString '\x1b[13;5u' },
       { key = 'phys:Slash', mods = 'CTRL', action = act.SendString '\x1b[47;5u' },
       { key = 'phys:Slash', mods = 'CTRL|SHIFT', action = act.SendString '\x1b[47;6u' },
     }

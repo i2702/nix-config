@@ -142,8 +142,9 @@ in
       le = "less";
       gr = ''grep -rniE --color=auto --exclude-dir={node_modules,dist,build,.git} -C 2'';
       # noglob: rg foo **/*.md のようにクォート無しで glob パターンを渡せるようにする
-      rg = ''noglob rg -p'';
-      rgf = ''noglob rg -p --files --iglob'';
+      # 色やページャの制御は rg-page 側で持つ
+      rg = ''noglob rg-page'';
+      rgf = ''noglob rg-page --files --iglob'';
       cw = "gwq cd";
       hms = hmSwitch;
     } // lib.optionalAttrs pkgs.stdenv.isLinux {
@@ -203,6 +204,32 @@ in
         else
           bat "$@"
         fi
+      }
+
+      # 端末に出すときだけページャを挟む。bat --paging=auto は less に
+      # --quit-if-one-screen を渡すので、1画面に収まる分はそのまま画面に残り、
+      # 溢れたときだけ less が開く。パイプ・リダイレクト時は素通しする。
+      #
+      # --style=plain で bat の枠と行番号を落とす。rg 側が既に行番号やパスを
+      # 出しており、bat の装飾が二重に付くと読みにくいため。
+      page-if-long() {
+        if [[ -t 1 ]]; then
+          bat --language=help --paging=auto --style=plain
+        else
+          cat
+        fi
+      }
+
+      # rg: ファイルの中身を検索する (rg エイリアスの実体)。
+      # --pretty は色・見出し・行番号を固定する。パイプ先へ色を残すため、
+      # 出力先が端末でなくても外さない (rg foo | le で色が消えないようにする)。
+      #
+      # command を付けないと、関数定義がパースされる時点で alias rg が展開されて
+      # 自分自身を呼ぶ形になる。
+      rg-page() {
+        command rg --pretty "$@" | page-if-long
+        # ページャ側ではなく rg の終了ステータスを返す (ヒット0 = 1)
+        return $pipestatus[1]
       }
 
       # ghq 管理下のリポジトリを fzf で選んで移動する。

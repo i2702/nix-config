@@ -52,7 +52,7 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 │   └── linux.nix          # WSL:   username / homeDirectory
 ├── modules/               # 1 ファイル = 1 ツールの設定
 │   ├── zsh.nix            # Zsh / Oh My Zsh / alias / プロンプト / WSL 連携
-│   ├── git.nix  gh.nix  lazygit.nix
+│   ├── git.nix  gh.nix  lazygit.nix  forgit.nix
 │   ├── neovim.nix  vim.nix
 │   ├── herdr.nix          # ターミナルマルチプレクサ（自動起動）
 │   └── ghostty.nix  wezterm.nix
@@ -99,6 +99,7 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 | --- | --- |
 | Git | 多数のエイリアス、[delta](https://github.com/dandavison/delta) で差分表示、identity は `config.local` から include |
 | lazygit | 日本語 UI、delta 連携、独自 customCommands（push / fetch --prune） |
+| [forgit](https://github.com/wfxr/forgit) | fzf で git 操作をインタラクティブに（`ga` / `gd` / `glo` / `gco` など）。Oh My Zsh の `git` プラグインと同名のエイリアス 16 個は forgit 側で上書きされる |
 | GitHub CLI (`gh`) | HTTPS 認証。git の credential helper としても利用 |
 
 ### ターミナルエミュレータ

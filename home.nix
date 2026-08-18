@@ -31,6 +31,7 @@
     ./modules/ghq.nix
     ./modules/gwq.nix
     ./modules/fzf.nix
+    ./modules/forgit.nix
     ./modules/lazygit.nix
     ./modules/mdp.nix
     ./modules/rust.nix

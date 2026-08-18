@@ -208,9 +208,13 @@ in
       # ghq 管理下のリポジトリを fzf で選んで移動する。
       # alias の `cd $(ghq list -p | fzf)` にしないのは、fzf をキャンセルすると
       # コマンド置換が空になり、引数なしの cd = ホーム移動になってしまうため。
+      # 引数は fzf の初期クエリになる (cg sptv → sptv で絞り込んだ状態で開く)。
+      # --select-1: 候補が1つに絞れたら fzf を開かず即移動する (gwq cd と同じ挙動)。
+      # --exit-0 は付けない。無言で終わるより、0件のまま fzf が開いて
+      # クエリを打ち直せるほうが分かりやすいため。
       cg() {
         local dir
-        dir="$(ghq list -p | fzf)" || return
+        dir="$(ghq list -p | fzf --query="$*" --select-1)" || return
         [[ -n "$dir" ]] && cd "$dir"
       }
 

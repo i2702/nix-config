@@ -141,10 +141,10 @@ in
       vim = "nvim";
       le = "less";
       gr = ''grep -rniE --color=auto --exclude-dir={node_modules,dist,build,.git} -C 2'';
-      # noglob: rg foo **/*.md のようにクォート無しで glob パターンを渡せるようにする
-      # 色やページャの制御は rg-page 側で持つ
+      # noglob: rg 'foo.*bar' のようにクォート無しで正規表現を渡せるようにする
+      # 色やページャの制御は rg-page / rgf-page 側で持つ
       rg = ''noglob rg-page'';
-      rgf = ''noglob rg-page --files --iglob'';
+      rgf = ''noglob rgf-page'';
       cw = "gwq cd";
       hms = hmSwitch;
     } // lib.optionalAttrs pkgs.stdenv.isLinux {
@@ -230,6 +230,25 @@ in
         command rg --pretty "$@" | page-if-long
         # ページャ側ではなく rg の終了ステータスを返す (ヒット0 = 1)
         return $pipestatus[1]
+      }
+
+      # rgf: ファイル名(リポジトリ相対パス)を検索する (rgf エイリアスの実体)。
+      # rg --files が出すパス一覧をもう一段 rg に通すだけなので、パターンは rg と
+      # 同じ正規表現で書ける。旧実装の `--iglob` と違い `rgf '*.nix'` のように
+      # 前後へ `*` を付ける必要がなく、`rgf nix` で中間一致する。-i や -v などの
+      # オプションもそのまま効く。
+      #
+      # --smart-case は旧実装の --iglob (大文字小文字を無視するグロブ) の
+      # 使い勝手に合わせたもの。小文字だけのパターンなら大小を区別しない。
+      #
+      # パスで絞りたい場合は引数ではなくパターンに書く (rgf 'modules/.*nix')。
+      # 2つめの引数はパス指定として後段の rg に渡ってしまい、ファイル名検索では
+      # なく中身の検索になる。
+      rgf-page() {
+        command rg --files \
+          | command rg --color=always --no-heading --no-line-number --smart-case "$@" \
+          | page-if-long
+        return $pipestatus[2]
       }
 
       # ghq 管理下のリポジトリを fzf で選んで移動する。

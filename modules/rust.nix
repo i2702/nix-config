@@ -29,8 +29,17 @@
   # 用途ごとに正しいコンパイラが違う。PATH の順序で解決しようとすると
   # どちらかが壊れる。
   #
-  # 全設定を aarch64-apple-darwin にスコープしてあるので、このファイルを
-  # linux ホストに置いても無害 (linux の cc→gcc は正常に動く)。
+  # linux でも似た衝突が起きる。nix の gcc でリンクすると、出来上がった
+  # バイナリのインタプリタが nix の ld.so になり、**ディストリの
+  # /etc/ld.so.cache を読まない**。直接の依存は RUNPATH で拾えるが、
+  # RUNPATH は推移的な依存には効かないので、システムのライブラリが
+  # さらに別のライブラリを要る場面で崩れる
+  # (例: GTK/WebKit を使う Tauri アプリが libpango 越しに libfribidi を
+  # 見失い、`error while loading shared libraries` で起動しない)。
+  # ディストリの cc でリンクすれば、ふつうのシステムバイナリになる。
+  #
+  # どちらの設定もターゲットにスコープしてあるので、このファイルは
+  # mac と linux のどちらに置いても、相手側には影響しない。
   # CC_<target> 形式は cc クレートが CC より優先して参照する変数。
   home.file.".cargo/config.toml".text = ''
     [env]
@@ -39,5 +48,8 @@
 
     [target.aarch64-apple-darwin]
     linker = "/usr/bin/clang"
+
+    [target.x86_64-unknown-linux-gnu]
+    linker = "/usr/bin/cc"
   '';
 }

@@ -70,11 +70,15 @@ let
     # エラーも出さずに何もしなくなる(modules/controlmymonitor.nix)。
     #
     # wsl.exe から開かれたセッションのソケット(<pid>_interop)は Session 1 に
-    # 属するので、そちらを拾う。ソケットは接続元の端末を閉じると消えるため、
-    # 効かなくなったら手で wsl-interop-refresh を叩き直せばよい。
-    wsl-interop-refresh() {
-      [[ -S "$WSL_INTEROP" ]] && return 0
-
+    # 属するので、そちらを拾う。
+    #
+    # 候補を1つに決め打たず列挙で返すのは、ここでは「使えるソケット」を確定
+    # できないため。ソケットはファイルとして存在し zsocket の connect も通るのに、
+    # それ経由の Windows プロセス起動だけが "Invalid argument" (exit 1) で落ちる
+    # ことがある(Session 0 の 2_interop が実際にそう)。-S でも connect でも
+    # 見分けられないので、実際に exe を起動して確かめ、駄目なら次の候補へ進む
+    # 責務は呼び出し側に持たせる(modules/controlmymonitor.nix の cmm-ensure)。
+    wsl-interop-list() {
       # 1_interop は初回起動時のもの = Session 0。実体(2_interop 等)ごと除外する。
       local fallback="$(readlink -f /run/WSL/1_interop 2>/dev/null)"
       local sock pid
@@ -84,10 +88,18 @@ let
         # 名前の pid が生きているものだけが有効。閉じた端末の残骸を掴まない。
         pid="''${sock:t}"
         [[ -d "/proc/''${pid%%_*}" ]] || continue
-        export WSL_INTEROP="$sock"
-        return 0
+        print -r -- "$sock"
       done
-      return 1
+    }
+
+    # 起動時の初期値を入れるだけの軽い版。ソケットは接続元の端末を閉じると
+    # 消えるので、長く開いたシェルではここで入れた値がいずれ無効になる。
+    wsl-interop-refresh() {
+      [[ -S "$WSL_INTEROP" ]] && return 0
+      local sock
+      sock=$(wsl-interop-list | head -1)
+      [[ -n "$sock" ]] || return 1
+      export WSL_INTEROP="$sock"
     }
     wsl-interop-refresh
 

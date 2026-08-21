@@ -17,7 +17,7 @@ nix で宣言できず、マシンごとに手で実行する必要がある作�
 herdr pane list   # → {"error":{"code":"protocol_mismatch",...}} なら不一致
 ```
 
-この状態ではキーバインドのシェルスクリプト(Alt-v / Alt-a / Alt-e)と cd 毎の
+この状態ではキーバインドのシェルスクリプト(Alt-f / Alt-a / Alt-e)と cd 毎の
 ペインラベル更新が止まる。解消はこのコマンド:
 
 ```bash

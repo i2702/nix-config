@@ -47,13 +47,14 @@
     focus_pane_up = "alt+k"
     focus_pane_right = "alt+l"
 
-    # 分割は Alt-v / Alt-s を「自動タイル分割」(下の [[keys.command]])に割り当てた。
-    # 一番大きいペインを長辺方向に分割してタブを常に均等グリッドに保つため、ペインが
-    # 4つになると自動的に 2x2 になる。方向は自動判定なので Alt-v / Alt-s は同じ動作。
-    # 方向を明示したいとき用に、herdr 標準の方向指定分割は prefix 側に残す:
-    #   prefix+v (Alt-t → v) = 右に分割 / prefix+s (Alt-t → s) = 下に分割
-    split_vertical = "prefix+v"
-    split_horizontal = "prefix+s"
+    # 方向指定の分割(herdr 標準動作: フォーカス中ペインを割る)。
+    #   Alt-v = 右に分割(縦線。vim の :vsplit と同じ向き) / Alt-s = 下に分割(横線)
+    # 方向を自動判定してグリッドを保つ「自動タイル分割」は Alt-f(下の [[keys.command]])。
+    # 以前は Alt-v / Alt-s の両方を自動タイルに充てて方向指定を prefix 側(Alt-t → v/s)に
+    # 追いやっていたが、2キーが同じ動作で冗長なうえ v/s が方向を連想させるのに区別されず、
+    # 「ここを右に割りたい」ときに2打必要だったので入れ替えた。prefix 側は標準のまま残す。
+    split_vertical = ["prefix+v", "alt+v"]
+    split_horizontal = ["prefix+s", "alt+s"]
 
     # Alt-q でペインを閉じる
     close_pane = "alt+q"
@@ -90,17 +91,12 @@
     # 他のタブ操作キー(next_tab 等)はタブが増えない限り無害なのでデフォルトのまま放置。
     new_tab = ""
 
-    # 自動タイル分割: Alt-v / Alt-s のどちらでもフォーカス中タブに新ペインを追加して
-    # 均等グリッドを保つ。type = "shell" はバックグラウンド実行で、スクリプトが herdr CLI 経由で
+    # 自動タイル分割: Alt-f でフォーカス中タブに新ペインを追加して均等グリッドを保つ。
+    # type = "shell" はバックグラウンド実行で、スクリプトが herdr CLI 経由で
     # 「一番大きいペインを長辺方向に分割」する。これによりペイン4つで必ず 2x2 になる。
+    # 方向を明示したいときは Alt-v / Alt-s(keys の split_vertical / split_horizontal)。
     [[keys.command]]
-    key = "alt+v"
-    type = "shell"
-    command = "~/.config/herdr/scripts/autotile-split.sh"
-    description = "自動タイル分割(グリッドに追加)"
-
-    [[keys.command]]
-    key = "alt+s"
+    key = "alt+f"
     type = "shell"
     command = "~/.config/herdr/scripts/autotile-split.sh"
     description = "自動タイル分割(グリッドに追加)"
@@ -163,7 +159,7 @@
     kitty_graphics = true
   '';
 
-  # 自動タイル分割スクリプト(Alt-v / Alt-s から呼ばれる)。
+  # 自動タイル分割スクリプト(Alt-f から呼ばれる)。
   # フォーカス中タブの「一番大きいペイン」を長辺方向に分割する。端末セルは縦:横 ≒ 2:1 なので
   # 幅 > 2*高さ なら右(縦線)分割、そうでなければ下(横線)分割。これを繰り返すとタブは常に
   # 均等グリッドに保たれ、ペインが4つになると自動的に 2x2 になる。

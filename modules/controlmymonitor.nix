@@ -42,7 +42,13 @@
       esac
     }
 
-    # WSL_INTEROP を、実際に exe が起動できるソケットに合わせる。
+    # /smonitors の出力を UTF-8 で返す(exe の出力は UTF-16LE)。
+    # DDC 通信を伴わないので 0.1 秒で返る(/GetValue は DDC を読むので 1.3 秒)。
+    cmm-monitors() {
+      "$CMM_EXE" /smonitors "" 2>/dev/null | iconv -f UTF-16LE -t UTF-8 2>/dev/null
+    }
+
+    # WSL_INTEROP を、実際にモニタを列挙できるソケットに合わせる。
     #
     # 掴んだソケットは提供元(wsl.exe を開いた Windows 側の端末)が閉じれば無効に
     # なるので、長く開いたままの zsh — 特に Mac から SSH したセッション — では
@@ -50,28 +56,32 @@
     # "Invalid argument" で落ち、2台とも切り替わらない。
     #
     # 死活は事前判定できない(ソケットは残り connect も通る)ため、候補を順に
-    # 当てて実際に起動できたものを採る。判定に /smonitors を使うのは DDC 通信を
-    # 伴わず 0.1 秒で返るため(/GetValue は DDC を読むので 1.3 秒かかる)。
+    # 当てて実際に確かめる。
+    #
+    # 合格条件を「exe が起動できた」ではなく「モニタが1台以上見えた」にするのは、
+    # Session 0(サービス用の非対話セッション)のソケットでは exe が起動でき
+    # exit 0 で返るのに、デスクトップが無いためモニタを1台も列挙しないため。
+    # 起動可否だけで判定すると Session 0 のソケットを有効とみなして先へ進み、
+    # ddc-visible が全モニタで false になる。すると原因と無関係な「Windows から
+    # 見えません」だけが出て、interop の取り違えが表に出なくなる。
     cmm-ensure() {
       local sock
-      "$CMM_EXE" /smonitors "" > /dev/null 2>&1 && return 0
+      cmm-monitors | grep -q "Short Monitor ID:" && return 0
 
       for sock in ''${(f)"$(wsl-interop-list)"}; do
         export WSL_INTEROP="$sock"
-        "$CMM_EXE" /smonitors "" > /dev/null 2>&1 && return 0
+        cmm-monitors | grep -q "Short Monitor ID:" && return 0
       done
 
-      print -u2 "ControlMyMonitor を起動できません(有効な WSL_INTEROP が無い)。Windows 側で WSL の端末を1つ開いてから再実行してください。"
+      print -u2 "ControlMyMonitor がモニタを列挙できません(デスクトップの見える WSL_INTEROP が無い)。Windows 側で WSL の端末を1つ開いてから再実行してください。"
       return 1
     }
 
     # 対象モニタが Windows から見えているか。
-    # /smonitors の出力は UTF-16LE なので iconv を通す。Short Monitor ID は
-    # 引用符ごと照合する(Monitor ID 行の MONITOR\BNQ809F\... に誤爆させない)。
+    # Short Monitor ID は引用符ごと照合する(Monitor ID 行の MONITOR\BNQ809F\... に
+    # 誤爆させない)。
     ddc-visible() {
-      "$CMM_EXE" /smonitors "" 2>/dev/null \
-        | iconv -f UTF-16LE -t UTF-8 2>/dev/null \
-        | grep -q "\"$1\""
+      cmm-monitors | grep -q "\"$1\""
     }
 
     # 入力を切り替える: ddc-input dell 27

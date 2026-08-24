@@ -62,29 +62,31 @@ let
     #
     # systemd=true ではユーザーのシェルが login 経由で起動し wsl.exe の子孫に
     # ならないため、WSL_INTEROP が渡ってこない。この変数が無いと /init は
-    # ディストロ初回起動時の interop(/run/WSL/1_interop)にフォールバックし、
-    # そこから起動した Windows プロセスは Session 0(サービス用の非対話セッション)
-    # で動く。Session 0 にはデスクトップが無く、実ディスプレイも見えない
+    # ディストロ初回起動時の interop(/run/WSL/1_interop)にフォールバックする。
+    #
+    # 避けたいのは Session 0(サービス用の非対話セッション)のソケットを掴むこと。
+    # Session 0 にはデスクトップが無く、実ディスプレイも見えない
     # (1024x768 の "WinDisc" 擬似ディスプレイのみ)。
-    # 症状: ControlMyMonitor がモニタを1台も列挙できず、disp-win / disp-mac が
-    # エラーも出さずに何もしなくなる(modules/controlmymonitor.nix)。
+    # 症状: ControlMyMonitor がモニタを1台も列挙できない
+    # (modules/controlmymonitor.nix)。
     #
-    # wsl.exe から開かれたセッションのソケット(<pid>_interop)は Session 1 に
-    # 属するので、そちらを拾う。
+    # どのソケットが Session 0 かはソケット名からは判別できない。名前の新しさも
+    # 当てにならず、実測ではむしろ逆だった: 1_interop の実体 2_interop が
+    # Session 1(console にログイン中のユーザー)で、Windows のサービスから
+    # 起動された wsl.exe が後から作った 29248_interop が Session 0 だった。
+    # ここで 1_interop の実体を Session 0 と決めつけて除外していたため、唯一の
+    # 正しい候補が捨てられていた。候補は絞らず全部返す。
     #
-    # 候補を1つに決め打たず列挙で返すのは、ここでは「使えるソケット」を確定
-    # できないため。ソケットはファイルとして存在し zsocket の connect も通るのに、
-    # それ経由の Windows プロセス起動だけが "Invalid argument" (exit 1) で落ちる
-    # ことがある(Session 0 の 2_interop が実際にそう)。-S でも connect でも
-    # 見分けられないので、実際に exe を起動して確かめ、駄目なら次の候補へ進む
-    # 責務は呼び出し側に持たせる(modules/controlmymonitor.nix の cmm-ensure)。
+    # 1つに決め打たず列挙で返すのも同じ理由。ソケットはファイルとして存在し
+    # zsocket の connect も通るのに、それ経由の Windows プロセス起動だけが
+    # "Invalid argument" (exit 1) で落ちることもある。-S でも connect でも
+    # 見分けられないので、実際に使って確かめ、駄目なら次の候補へ進む責務は
+    # 呼び出し側に持たせる(modules/controlmymonitor.nix の cmm-ensure)。
     wsl-interop-list() {
-      # 1_interop は初回起動時のもの = Session 0。実体(2_interop 等)ごと除外する。
-      local fallback="$(readlink -f /run/WSL/1_interop 2>/dev/null)"
       local sock pid
-      # (=Nom): ソケットのみ / 無ければ空 / 新しい順。symlink は lstat で弾かれる。
+      # (=Nom): ソケットのみ / 無ければ空 / 新しい順。symlink(1_interop)は lstat で
+      # 弾かれるが、その実体(2_interop 等)は候補に残る。
       for sock in /run/WSL/*_interop(=Nom); do
-        [[ -n "$fallback" && "$sock" == "$fallback" ]] && continue
         # 名前の pid が生きているものだけが有効。閉じた端末の残骸を掴まない。
         pid="''${sock:t}"
         [[ -d "/proc/''${pid%%_*}" ]] || continue

@@ -35,6 +35,64 @@ let
     '';
   };
 
+  # ウィンドウタイトルの出し分け。Mac 専用。
+  # ローカルで作業している間は " Mac"、Windows 機へ ssh している間は "󰖳 Win" に
+  # 変えて、今どちらのマシンを触っているかをタイトルバーだけで判別できるようにする。
+  # WSL 側は接続先の Windows 機そのもので出し分ける対象が無いため入れない。
+  macOnly = lib.optionalString pkgs.stdenv.isDarwin ''
+    # macOS のタイトルバーはターミナルのフォントではなくシステムフォントで描画され、
+    # 持っていない字はインストール済みフォントへフォールバックする。そのため
+    # 「ターミナルで見える字」と「タイトルバーで見える字」は一致しない。実機で確認した:
+    #   U+F8FF  = Apple ロゴ。Apple のシステムフォント側が持つ (HackGen Console NF には無い)。
+    #   U+F05B3 = Nerd Font の Windows ロゴ (nf-md-microsoft_windows)。HackGen が持ち、
+    #             フォールバックで拾われた。同じ Nerd Font でも nf-fa-windows (U+F17A) や
+    #             nf-seti-windows (U+E62A) は拾われず豆腐になったので、この字でなければ駄目。
+    _window_title_local=$'\U0000F8FF Mac'
+
+    # タイトルの出し先は herdr の内と外で変わる。
+    # herdr のペインが出した OSC 2 は herdr 自身のターミナルエミュレータが吸って
+    # ペインの表示名 (サイドバーの terminal_title) になるだけで、外側の Ghostty には
+    # 届かない。herdr 配下では socket API の client.window_title.set を使う。
+    # 専用の CLI サブコマンドは無いので zsh の zsocket で直接叩く (外部コマンド不要)。
+    _set_window_title() {
+      if [[ -n "$HERDR_PANE_ID" && -S "$HERDR_SOCKET_PATH" ]]; then
+        zmodload zsh/net/socket 2>/dev/null || return
+        zsocket "$HERDR_SOCKET_PATH" 2>/dev/null || return
+        local fd=$REPLY
+        print -u$fd -r -- "{\"id\":\"window_title\",\"method\":\"client.window_title.set\",\"params\":{\"title\":\"$1\"}}"
+        # 応答は使わないが読む。読まずに閉じると herdr 側が書き込みで転ける。
+        read -r -t 1 -u$fd
+        exec {fd}>&-
+      else
+        printf '\033]2;%s\a' "$1"
+      fi
+    }
+
+    # ssh 先ごとのタイトル。表に無いホストでは何も返さず、タイトルはローカルのまま据え置く。
+    _window_title_for_ssh() {
+      case "$*" in
+        # WSL の入った Windows 機 (ssh m1205062@192.168.1.254 -p 2222)。
+        # ユーザ名やオプションの並び順に依存しないよう、ホストだけで判定する。
+        *192.168.1.254*) print -r -- $'\U000F05B3 Win' ;;
+      esac
+    }
+
+    # ssh している間だけタイトルを差し替え、抜けたらローカルへ戻す。
+    # Why not: ウィンドウタイトルは Ghostty ウィンドウ全体の属性で、herdr のペインごとには
+    # 持てない。複数ペインで同時に ssh すると最後に出入りしたペインの状態が全体に出る。
+    ssh() {
+      local remote
+      remote=$(_window_title_for_ssh "$@")
+      [[ -n "$remote" ]] && _set_window_title "$remote"
+      command ssh "$@"
+      local ret=$?
+      [[ -n "$remote" ]] && _set_window_title "$_window_title_local"
+      return $ret
+    }
+
+    _set_window_title "$_window_title_local"
+  '';
+
   # WSL(Windows側との連携)に依存する部分。Macでは無効化する。
   wslOnly = lib.optionalString pkgs.stdenv.isLinux ''
     # WSL clipboard (UTF-8 → Shift-JIS変換)
@@ -318,6 +376,8 @@ in
       if [[ "$PWD" == "$HOME" && -d "$HOME/Repository" ]]; then
         cd "$HOME/Repository"
       fi
+
+      ${macOnly}
 
       # ==========================================
       # ターミナルマルチプレクサの自動起動(herdr / tmux の振り分け)

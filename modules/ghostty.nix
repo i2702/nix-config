@@ -18,6 +18,13 @@
     # tmux の M-t / M-s / M-v / M-h,j,k,l 等の Alt バインドが効かない。
     macos-option-as-alt = true
 
+    # シェル統合が prompt ごとに書き戻すタイトルを止める。
+    # 既定で有効な title 機能は「カレントディレクトリ / 実行中コマンド」を
+    # OSC で流し込むため、こちらで設定した " Mac" / "󰖳 Win" (modules/zsh.nix) が
+    # プロンプトのたびに上書きされてしまう。
+    # 列挙しなかった機能は既定値のままになるので、無効化する1つだけを書けばよい。
+    shell-integration-features = no-title
+
     # --- タブ機能の無効化 ---
     # Ghostty のネイティブタブは macOS の Window API 上「別ウィンドウ」として見える。
     # そのため AeroSpace がタブ毎に別ウィンドウ・別ワークスペースとして扱い、

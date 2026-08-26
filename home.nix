@@ -38,6 +38,7 @@
     ./modules/wezterm.nix
     ./modules/ghostty.nix
     ./modules/zed.nix
+    ./modules/claude-code.nix
   ];
 
   programs.home-manager.enable = true;

@@ -7,4 +7,5 @@ description: >-
 # コミットメッセージを書くルール
 
 Conventional Commitsでメッセージを記述する
+複数のモジュールに分かれたリポジトリの場合、feat(mod1)のようにモジュール名をプレフィクスに含める
 Githubのissueに紐付いたコミットであるならbodyの冒頭にissueのIDを書く

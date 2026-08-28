@@ -18,11 +18,90 @@ let
     in
     "home-manager switch -b backup --flake ~/nix-config#${target}";
 
+  # デスクトップ(対話ユーザーの Windows セッション)に繋がる interop ソケットを1つ返す。
+  #
+  # Windows のサービスから起こされた WSL の interop は Session 0 に属する。Session 0 には
+  # 対話デスクトップが無い(Session 0 Isolation)ため、そこへ頼んだ GUI の起動は画面に
+  # 出ないどころか要求ごと握り潰される。しかも rundll32 は終了コード 0 を返すので、
+  # 「成功したのにブラウザだけ開かない」という手掛かりの無い症状になる。
+  #
+  # どのソケットが Session 0 かは名前からも新しさからも判らない。実測では後からできた
+  # 方(29248_interop)が Session 0 で、ディストロ起動時の 2_interop が Session 1 だった。
+  # 実際に Windows のプロセスを1つ起こして SessionId を訊くしかない。これは 1 回 2-3 秒
+  # かかるため、ソケットのパスと mtime をキーに結果をキャッシュする。ソケットは WSL の
+  # VM が生きている限り作り直されないので、実質 Windows の再起動ごとに1回だけ払う。
+  wslInteropGui = pkgs.writeShellApplication {
+    name = "wsl-interop-gui";
+    runtimeInputs = with pkgs; [
+      coreutils
+      findutils
+      gawk
+    ];
+    text = ''
+      cache_dir="''${XDG_CACHE_HOME:-$HOME/.cache}"
+      cache="$cache_dir/wsl-interop-session"
+      mkdir -p "$cache_dir"
+
+      # 新しい順に見る。Session 0 を弾いた後はどれでも変わらないが、生きている見込みの
+      # 高い方から当てる。-type s で symlink(1_interop)は落ち、その実体は候補に残る。
+      while read -r sock; do
+        name="''${sock##*/}"
+        # 名前の pid が生きているものだけが有効。閉じた端末の残骸を掴まない。
+        [ -d "/proc/''${name%%_*}" ] || continue
+
+        key="$sock:$(stat -c %Y "$sock")"
+        sid=""
+        if [ -f "$cache" ]; then
+          sid=$(awk -v k="$key" '$1 == k { print $2; exit }' "$cache")
+        fi
+
+        if [ -z "$sid" ]; then
+          # shellcheck disable=SC2016 # $PID は PowerShell 側の変数
+          # </dev/null は必須。付けないと powershell がこのループの標準入力
+          # (= 候補一覧)を読み切ってしまい、2つ目以降の候補が試されない。
+          sid=$(WSL_INTEROP="$sock" timeout 20 \
+                  /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe \
+                  -NoProfile -NonInteractive \
+                  -Command '(Get-Process -Id $PID).SessionId' </dev/null 2>/dev/null \
+                | tr -dc '0-9') || true
+          # ソケットが残り connect も通るのに、それ経由の起動だけが "Invalid argument"
+          # で落ちることがある。空を x として覚え、次からは飛ばす。
+          [ -n "$sid" ] || sid=x
+          printf '%s %s\n' "$key" "$sid" >> "$cache"
+        fi
+
+        case "$sid" in
+          0 | x) continue ;;
+          *)
+            printf '%s\n' "$sock"
+            exit 0
+            ;;
+        esac
+      done < <(find /run/WSL -maxdepth 1 -name '*_interop' -type s -printf '%T@ %p\n' 2>/dev/null \
+                 | sort -rn | cut -d' ' -f2-)
+
+      exit 1
+    '';
+  };
+
   # $BROWSER の実体。WSL から Windows の既定ブラウザで URL を開く。
   wslOpenUrl = pkgs.writeShellApplication {
     name = "wsl-open-url";
+    runtimeInputs = [ wslInteropGui ];
     text = ''
       url="''${1:?URL を指定してください}"
+
+      # 呼び出し元のシェルが持つ WSL_INTEROP は当てにしない。SSH ログイン(WezTerm の
+      # 既定ドメイン)には WSL_INTEROP が渡らず、下の wsl-interop-refresh が候補の
+      # 先頭を掴むだけなので、デスクトップの無い Session 0 のソケットが入っている。
+      # 一般の interop(clip.exe など)はそれで困らないが、GUI はここで選び直さないと
+      # 開かない。
+      if sock=$(wsl-interop-gui); then
+        export WSL_INTEROP="$sock"
+      else
+        printf '%s\n' "デスクトップに繋がる WSL interop がありません。Windows 側で WSL の端末を1つ開いてから再実行してください。" >&2
+        exit 1
+      fi
 
       # url.dll,FileProtocolHandler は URL を既定ハンドラ(= 既定ブラウザ)へ
       # 渡すための Windows の口。rundll32 はコマンドラインを cmd に通さず、
@@ -154,6 +233,11 @@ let
 
     # 起動時の初期値を入れるだけの軽い版。ソケットは接続元の端末を閉じると
     # 消えるので、長く開いたシェルではここで入れた値がいずれ無効になる。
+    #
+    # ここは Session を見ない。判定には Windows のプロセス起動が要り 2-3 秒かかるので、
+    # 全シェルの起動を待たせてまで払う価値が無いため。clip.exe や shutdown.exe のような
+    # GUI を伴わない interop は Session 0 でも問題なく動く。デスクトップが要る用途
+    # (ブラウザ = wsl-open-url、ControlMyMonitor)は各自で選び直す責務を持つ。
     wsl-interop-refresh() {
       [[ -S "$WSL_INTEROP" ]] && return 0
       local sock
@@ -188,6 +272,7 @@ in
 {
   home.packages = lib.optionals pkgs.stdenv.isLinux [
     pkgs.nkf
+    wslInteropGui
     wslOpenUrl
   ];
 

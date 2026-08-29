@@ -63,8 +63,11 @@ let
     -- 単一タブのときは隠す。
     config.hide_tab_bar_if_only_one_tab = true
 
-    -- 新しい起動(wezterm start など)を新規ウィンドウではなく既存ウィンドウのタブとして開く。
-    config.prefer_to_spawn_tabs = true
+    -- 起動を既存ウィンドウのタブにまとめる prefer_to_spawn_tabs は設定しない。
+    -- ホットキー(Raycast)から欲しいのはタブでも新しいウィンドウでもなく、既に開いている
+    -- ウィンドウへのフォーカスだけだから。Raycast が叩くのは Start Menu の Wezterm.lnk
+    -- (= wezterm-gui.exe を引数なしで起動)で、この経路では設定を入れても新しいウィンドウが
+    -- 開いた。起動するかフォーカスするかの分岐は下の .wezterm-focus.vbs 側で行う。
 
     -- Kitty keyboard protocol は有効にしない(config.enable_kitty_keyboard は既定の無効のまま)。
     -- 有効にすると ATOK で確定した文字が「1文字のときだけ」消える。protocol が有効だと
@@ -120,12 +123,183 @@ let
 
     return config
   '';
+
+  # Raycast のホットキーから呼ぶランチャ。WezTerm が起動済みなら既存ウィンドウを前面に出し
+  # (Alt-Tab で切り替えたのと同じ状態にし)、起動していなければ新しいウィンドウで起動する。
+  #
+  # Raycast 側は「アプリを起動して、そのプロセスのメインウィンドウを探して前面に出す」しか
+  # しない(ログの CreateProcess: activating ... → Failed to find main window)。wscript には
+  # ウィンドウが無いので Raycast の前面化は空振りする。よって前面化は自前で行う。
+  #
+  # 前面化を2段構えにしているのは、速い方法が効くとは限らないため。
+  #   1段目 (vbs): WScript.Shell.AppActivate。50ms 程度で済むが、Windows のフォアグラウンド
+  #                ロックに阻まれると何も起きず、最小化されたウィンドウも復元しない。
+  #                効いたかどうかを VBS 自身で確かめる手段が無い。
+  #   2段目 (ps1): Win32 API を直接叩き、GetForegroundWindow で確認したうえで、必要なら
+  #                最小化の復元 → AttachThreadInput 付き SetForegroundWindow →
+  #                SwitchToThisWindow (Alt-Tab と同じ API) の順に試す。
+  #                Add-Type のコンパイルで 1.5 秒ほどかかるので、1段目が効いた場合は
+  #                何もせず終わる。
+  # どちらが効いたかは %TEMP%\wezterm-focus.log に残る。
+  #
+  # Raycast からこれを呼ぶには Start Menu にショートカットが要る(Raycast のアプリ一覧は
+  # Start Menu の .lnk を拾う)。.lnk はバイナリで nix からは書けないため、新しいマシンでは
+  # 以下を一度だけ Windows 側で実行する:
+  #   $s = (New-Object -ComObject WScript.Shell).CreateShortcut(
+  #          "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\WezTerm Focus.lnk")
+  #   $s.TargetPath   = "$env:SystemRoot\System32\wscript.exe"
+  #   $s.Arguments    = '"' + $env:USERPROFILE + '\.wezterm-focus.vbs"'
+  #   $s.IconLocation = "$env:USERPROFILE\scoop\apps\wezterm\current\wezterm-gui.exe,0"
+  #   $s.Save()
+  # そのうえで Raycast のホットキーを Wezterm ではなく WezTerm Focus に割り当てる。
+  focusScriptBody = pkgs.writeText "wezterm-focus-body.vbs" ''
+    ' このファイルは nix (home-manager) の生成物。直接編集しても switch で上書きされる。
+    ' 変更は ~/nix-config/modules/wezterm.nix を編集して home-manager switch する。
+    '
+    ' wscript (.vbs) を入口にしているのは、コンソールを一切出さずに 50ms 程度で起動できる
+    ' 唯一の軽い方法だから。.cmd や powershell.exe を直接呼ぶとウィンドウが一瞬光る。
+    Option Explicit
+
+    Dim sh, fso, wmi, procs, proc, pid, exe, logPath, psPath, i, ok
+
+    Set sh = CreateObject("WScript.Shell")
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    logPath = sh.ExpandEnvironmentStrings("%TEMP%") & "\wezterm-focus.log"
+    psPath = sh.ExpandEnvironmentStrings("%USERPROFILE%") & "\.wezterm-focus.ps1"
+
+    ' 名前を Log にすると VBScript 組み込みの Log 関数(自然対数)と衝突する。
+    Sub WriteLog(msg)
+      Dim f
+      Set f = fso.OpenTextFile(logPath, 8, True)
+      f.WriteLine Now & "  vbs  " & msg
+      f.Close
+    End Sub
+
+    Set wmi = GetObject("winmgmts:\\.\root\cimv2")
+    Set procs = wmi.ExecQuery("SELECT ProcessId FROM Win32_Process WHERE Name = 'wezterm-gui.exe'")
+    pid = 0
+    For Each proc In procs
+      pid = proc.ProcessId
+      Exit For
+    Next
+
+    If pid = 0 Then
+      exe = sh.ExpandEnvironmentStrings("%USERPROFILE%") & "\scoop\apps\wezterm\current\wezterm-gui.exe"
+      WriteLog "not running -> start " & exe
+      sh.Run Chr(34) & exe & Chr(34), 1, False
+    Else
+      ' 見つかったときは何があっても前面化だけ。起動へフォールバックはしない
+      ' (ウィンドウを増やさないことがこのスクリプトの目的なので)。
+      ok = False
+      For i = 1 To 3
+        ok = sh.AppActivate(pid)
+        If ok Then Exit For
+        WScript.Sleep 120
+      Next
+      ' 成功したときは黙る。ログは失敗の切り分けのためだけに残す。
+      If Not ok Then WriteLog "pid=" & pid & " appactivate=False"
+      ' AppActivate が True でも、Raycast が自分のウィンドウを閉じるときにフォーカスが
+      ' 元のアプリへ戻ることがある。実際に前面に出たかの確認と取りこぼしの回収は
+      ' PowerShell 側に任せる(最小化からの復元もそちらでしか出来ない)。
+      sh.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File " & Chr(34) & psPath & Chr(34), 0, False
+    End If
+  '';
+
+  focusFallbackBody = pkgs.writeText "wezterm-focus-body.ps1" ''
+    # このファイルは nix (home-manager) の生成物。直接編集しても switch で上書きされる。
+    # 変更は ~/nix-config/modules/wezterm.nix を編集して home-manager switch する。
+    #
+    # .wezterm-focus.vbs から呼ばれる2段目。AppActivate で前に出せなかった場合の回収役。
+    $log = Join-Path $env:TEMP 'wezterm-focus.log'
+    function WriteLog($m) { Add-Content -Path $log -Value ("{0}  ps   {1}" -f (Get-Date), $m) }
+
+    Add-Type @"
+    using System;
+    using System.Runtime.InteropServices;
+    public class WezFocus {
+      [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr h, int c);
+      [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+      [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr h, bool alt);
+      [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+      [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+      [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+      [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool f);
+      [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+      [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+      [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr p);
+      public delegate bool EnumProc(IntPtr h, IntPtr p);
+      // MainWindowHandle が 0 のときの保険。可視のトップレベルウィンドウを pid で探す。
+      public static IntPtr Find(uint target) {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows(delegate(IntPtr h, IntPtr p) {
+          uint owner; GetWindowThreadProcessId(h, out owner);
+          if (owner == target && IsWindowVisible(h)) { found = h; return false; }
+          return true;
+        }, IntPtr.Zero);
+        return found;
+      }
+    }
+    "@
+
+    $p = Get-Process wezterm-gui -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $p) { WriteLog 'wezterm-gui process not found'; exit }
+
+    $h = $p.MainWindowHandle
+    if ($h -eq [IntPtr]::Zero) { $h = [WezFocus]::Find([uint32]$p.Id) }
+    if ($h -eq [IntPtr]::Zero) { WriteLog 'window not found'; exit }
+
+    $fg = [WezFocus]::GetForegroundWindow()
+    $iconic = [WezFocus]::IsIconic($h)
+    # 1段目が効いていれば何もせず黙って終わる(ログも残さない)。
+    if (($fg -eq $h) -and (-not $iconic)) { exit }
+    WriteLog "need activation hwnd=$h fg=$fg iconic=$iconic"
+
+    # 最小化されているとフォーカスを移しても見えないので先に復元する。
+    if ($iconic) { [void][WezFocus]::ShowWindowAsync($h, 9) }
+
+    # 相手スレッドの入力キューに繋いでから SetForegroundWindow を呼ぶと、
+    # フォアグラウンドロックの制限を受けにくい。
+    $me = [WezFocus]::GetCurrentThreadId()
+    $ownerPid = [uint32]0
+    $target = [WezFocus]::GetWindowThreadProcessId($h, [ref]$ownerPid)
+    [void][WezFocus]::AttachThreadInput($me, $target, $true)
+    [void][WezFocus]::SetForegroundWindow($h)
+    [void][WezFocus]::AttachThreadInput($me, $target, $false)
+    Start-Sleep -Milliseconds 80
+
+    # それでも駄目なら Alt-Tab と同じ API で切り替える。
+    if ([WezFocus]::GetForegroundWindow() -ne $h) {
+      [WezFocus]::SwitchToThisWindow($h, $true)
+      Start-Sleep -Milliseconds 80
+    }
+
+    WriteLog ("result fg-is-wezterm=" + ([WezFocus]::GetForegroundWindow() -eq $h) + " iconic=" + [WezFocus]::IsIconic($h))
+  '';
+  # WSH (wscript) も BOM の無いファイルを ANSI(この環境では CP932)として読む。日本語の
+  # コメントが化けた結果、行末が継続文字 _ になる並びが出ると次の行がコメントに飲まれて
+  # 構文エラーになる(実測: Sub の直後の行で「ステートメントがありません」)。ps1 と違って
+  # UTF-8 BOM は WSH 自身が受け付けない(1,1 で「文字が正しくありません」)ため、
+  # CP932 に変換して置く。CP932 に無い文字をコメントに書くと iconv がビルド時に落ちる。
+  focusScript = pkgs.runCommand "wezterm-focus.vbs" { nativeBuildInputs = [ pkgs.glibc.bin ]; } ''
+    iconv -f UTF-8 -t CP932 ${focusScriptBody} > $out
+  '';
+
+  # PowerShell 5.1 は BOM の無いファイルを UTF-8 ではなく ANSI(この環境では CP932)として
+  # 読む。日本語のコメントが化け、化けた結果に構文上意味のある文字が混じると
+  # パースが壊れる(実測: 「'}' を使用できません」で起動しない)。BOM を付けて渡す。
+  focusFallback = pkgs.runCommand "wezterm-focus.ps1" { } ''
+    printf '\357\273\277' > $out
+    cat ${focusFallbackBody} >> $out
+  '';
+
 in
 {
   home.activation = lib.mkIf pkgs.stdenv.isLinux {
     weztermWindowsConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       if [ -d "${winHome}" ]; then
         run install -m 644 ${configFile} "${winHome}/.wezterm.lua"
+        run install -m 644 ${focusScript} "${winHome}/.wezterm-focus.vbs"
+        run install -m 644 ${focusFallback} "${winHome}/.wezterm-focus.ps1"
       fi
     '';
   };

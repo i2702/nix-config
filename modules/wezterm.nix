@@ -63,6 +63,9 @@ let
     -- 単一タブのときは隠す。
     config.hide_tab_bar_if_only_one_tab = true
 
+    -- 新しい起動(wezterm start など)を新規ウィンドウではなく既存ウィンドウのタブとして開く。
+    config.prefer_to_spawn_tabs = true
+
     -- Kitty keyboard protocol は有効にしない(config.enable_kitty_keyboard は既定の無効のまま)。
     -- 有効にすると ATOK で確定した文字が「1文字のときだけ」消える。protocol が有効だと
     -- WezTerm は入力を文字列としてではなくキーイベントとしてエンコードして送るため、

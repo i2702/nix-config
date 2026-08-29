@@ -107,7 +107,7 @@
     # (ターミナルは通常ペイン扱いで focus_pane_* / 方向指定でしか辿れない)。
     # そのため既存の自動タイル分割と同様、herdr CLI を使うカスタムコマンドで実装する。
     #   Alt-a = エージェント(claude 等)ペインへ。タブも space も飛び越えて全エージェントを巡回する
-    #           (herdr agent focus は space をまたいでフォーカスできることを確認済み)。
+    #           (socket API の pane.focus は space をまたいでフォーカスできることを確認済み)。
     #   Alt-e = 非エージェント(シェル)ペインへ。こちらは従来どおり現在タブ内で巡回する
     #           (シェルはプロジェクト内の行き来がほとんどのため。global を渡せば横断になる)。
     # 同じ role のペインが複数あれば、押すたびに次のペインへ巡回する。
@@ -221,23 +221,30 @@
   # pane list は全 space のペインを space 順で返すので、そのままの並びが巡回リングになる。
   # アクティブが別 role に居るとき(例: シェルに居て Alt-a)は、まず同じ space の role ペイン、
   # 無ければ並び順でアクティブより後ろの最初のペイン(prev なら前の最後のペイン)へ移る。
-  # フォーカスは herdr agent focus <terminal_id> で行う。任意ペインを id 指定でフォーカスできる
-  # 唯一の CLI 手段がこれ(pane focus は方向指定のみ)で、space をまたぐ移動もこれで機能する。
-  # ターミナル(エージェント不在)を対象にすると戻り値は agent_not_found エラーになるが、
-  # フォーカス移動自体は副作用として成功するため >/dev/null 2>&1 || true で握りつぶす。
+  # フォーカスは socket API の pane.focus を socat で直接叩く。herdr CLI を使わない理由:
+  # `herdr pane focus` は --direction 必須(= pane.focus_direction)で id 指定ができず、
+  # `herdr agent focus` は対象がエージェントペインに限られる(非エージェントには
+  # agent_not_found を返し、フォーカスも動かない)。pane.focus なら role を問わず pane_id 一発で、
+  # space をまたぐ移動も含めて動く。
+  # 以前は `herdr agent focus <terminal_id>` を使い、ターミナル対象で返る agent_not_found を
+  # 「エラーだがフォーカス移動は副作用で成功する」として握り潰していた。herdr 0.7.5 では agent
+  # target が terminal_id を一切解決しなくなり(pane_id のみ)、かつその副作用も無くなったため、
+  # Alt-a / Alt-Shift-a / Alt-e が揃って無反応になった。エラーを握り潰さないのは、同じ壊れ方を
+  # 二度と静かに起こさないため。
   xdg.configFile."herdr/scripts/focus-role.sh" = {
     text = ''
       #!/bin/bash
       set -eu
       herdr="''${HERDR_BIN_PATH:-herdr}"
       jq="${pkgs.jq}/bin/jq"
+      socat="${pkgs.socat}/bin/socat"
       active="''${HERDR_ACTIVE_PANE_ID:?HERDR_ACTIVE_PANE_ID is not set}"
       role="''${1:-agent}"
       scope="''${2:-tab}"
       dir="''${3:-next}"
 
       # role 一致ペイン群(scope=tab なら現在タブに限定)から「アクティブの次(prev なら前)」の
-      # terminal_id を選ぶ。to_entries の key = pane list 全体での並び位置。これをアクティブ同定と
+      # pane_id を選ぶ。to_entries の key = pane list 全体での並び位置。これをアクティブ同定と
       # 「前後」判定に使う。
       target=$(
         "$herdr" pane list \
@@ -260,12 +267,14 @@
                           end)
                     end
                 end
-              | .value.terminal_id
+              | .value.pane_id
             '
       )
 
       [ -n "''${target:-}" ] || exit 0
-      "$herdr" agent focus "$target" >/dev/null 2>&1 || true
+      socket="''${HERDR_SOCKET_PATH:-$HOME/.config/herdr/herdr.sock}"
+      printf '{"id":"focus-role","method":"pane.focus","params":{"pane_id":"%s"}}\n' "$target" \
+        | "$socat" - UNIX-CONNECT:"$socket" >/dev/null
     '';
     executable = true;
   };

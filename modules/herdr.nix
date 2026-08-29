@@ -130,6 +130,25 @@
     command = "~/.config/herdr/scripts/focus-role.sh terminal"
     description = "ターミナル(非エージェント)ペインへフォーカス(タブ内で巡回)"
 
+    # Alt-; でスクラッチシェルをポップアップで開く。
+    # type = "popup" はセッションモーダルの一時ターミナルで、タブのレイアウトを一切変えずに
+    # 開いてコマンド終了で消える。「ちょっと1コマンド叩きたい」ためにペインを割って閉じる
+    # (Alt-f → Alt-q)手間を無くすのが目的。
+    # キーが Alt-a でない理由: Alt-a は上のエージェントペインフォーカスで埋まっており、
+    # そちらは使用頻度が高く動かしたくない。Alt-; は herdr デフォルトとも既存設定とも衝突しない。
+    # なお句読点+修飾キーの到達性は端末依存(default-config にも注記あり)。届かない端末に
+    # 当たったら alt+shift+semicolon 等ではなく別の英字キーへ振り替える。
+    # popup で claude を起動しない理由: popup には HERDR_PANE_ID が渡らない(背後のペインの
+    # HERDR_ACTIVE_PANE_ID のみ)ため、下の zsh ラッパーによるサイドバー名/ペインラベルの
+    # cwd 追従が丸ごと効かない。エージェントは通常ペインで起動する。
+    [[keys.command]]
+    key = "alt+;"
+    type = "popup"
+    command = "exec \"''${SHELL:-sh}\""
+    description = "スクラッチシェルをポップアップで開く"
+    width = "80%"
+    height = "80%"
+
     [terminal]
     # 新規ペイン/タブはカレントディレクトリを引き継ぐ
     # follow は「起動時」ではなく「現在(cd 後)」のディレクトリを引き継ぐ。自動タイル分割の

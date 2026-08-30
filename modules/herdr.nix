@@ -141,6 +141,8 @@
     # popup で claude を起動しない理由: popup には HERDR_PANE_ID が渡らない(背後のペインの
     # HERDR_ACTIVE_PANE_ID のみ)ため、下の zsh ラッパーによるサイドバー名/ペインラベルの
     # cwd 追従が丸ごと効かない。エージェントは通常ペインで起動する。
+    # 閉じるのは Ctrl-D(シェル終了)か Alt-'(下の zsh 側の _herdr_close_popup)。
+    # ここに閉じるキーを足せない理由は下のウィジェットのコメント参照。
     [[keys.command]]
     key = "alt+;"
     type = "popup"
@@ -342,6 +344,28 @@
         _herdr_label_by_cwd
         return $ret
       }
+    elif [[ -n "$HERDR_ENV" ]]; then
+      # HERDR_ENV はあるが HERDR_PANE_ID が無い = ポップアップ(Alt-;)のシェル。
+      # ポップアップは pane 同一性を持たないので herdr 側が HERDR_PANE_ID だけを env から
+      # 取り除く。この差分がポップアップ判定になる。
+      #
+      # 閉じるキーを herdr の config.toml 側に置けない理由: ポップアップが開いている間、
+      # herdr はキーバインド照合より前に全キーをポップアップの PTY へ素通しする
+      # (handle_key が popup_pane を最初に見て handle_terminal_key へ抜ける)。prefix すら
+      # 発火しないため、閉じるキーは「受け取る側」であるこのシェルに置くしかない。
+      # socket API の popup.close を直接叩く(params は空)。herdr CLI に popup サブコマンドは
+      # 無いので、focus-role.sh の pane.focus と同じく socat で直に投げる。
+      #
+      # 制約: zle ウィジェットなので zsh のプロンプトにいるときだけ効く。ポップアップ内で
+      # vim や lazygit が動いていればキーはそちらに食われる。素のシェルなら Ctrl-D でも
+      # 閉じられるので、これはあくまで代替キー。
+      _herdr_close_popup() {
+        local socket="''${HERDR_SOCKET_PATH:-$HOME/.config/herdr/herdr.sock}"
+        printf '{"id":"close-popup","method":"popup.close","params":{}}\n' \
+          | ${pkgs.socat}/bin/socat - UNIX-CONNECT:"$socket" >/dev/null 2>&1
+      }
+      zle -N _herdr_close_popup
+      bindkey "\e'" _herdr_close_popup
     fi
   '';
 }

@@ -169,7 +169,11 @@ let
       return $ret
     }
 
-    _set_window_title "$_window_title_local"
+    # Why not (無条件で呼ばない理由): .zshrc は「ユーザーが見ている新しいシェル」以外でも
+    # 実行される。Claude Code の shell snapshot (tty 無しの interactive zsh) はペインの
+    # HERDR_SOCKET_PATH を継承したままこの行に到達し、ssh 中の "󰖳 Win" を " Mac" へ
+    # 巻き戻してしまう。実端末に繋がったシェルだけが起動時タイトルを主張する。
+    [[ -t 0 ]] && _set_window_title "$_window_title_local"
   '';
 
   # WSL(Windows側との連携)に依存する部分。Macでは無効化する。

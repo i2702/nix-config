@@ -166,6 +166,17 @@
     accent = "#ffaf00"
 
     [ui]
+    # 外側の端末(Ghostty)のウィンドウタイトルに herdr を触らせない。
+    # 既定値 "{hostname}: {workspace}" はクライアント起動時に OSC 0 を1回書く。これが
+    # Ghostty 直下で ssh した先で herdr を起動したときに Mac 側へ素通りし、zsh が立てた
+    # "󰖳 Win" (modules/zsh.nix) を "ayumi-hp: <space名>" へ潰していた。
+    # 0.7.5 には無く 0.8.2 で入った挙動なので、a00c0f5 の更新以降だけ再現する。
+    #
+    # Why not (ssh 側で立て直さない理由): タイトルを書くのは herdr のクライアント起動時
+    # なので、ssh 実行時に立てる zsh 側からは順序的に後追いできない。書かせない方が確実。
+    # 空にしても socket API の client.window_title.set は効くため、Mac 側で zsh が
+    # " Mac" / "󰖳 Win" を立てる仕組みはそのまま動く(実測で確認済み)。
+    window_title = ""
     # マウスを有効化
     mouse_capture = true
     # 名前入力なしでタブを即時作成する

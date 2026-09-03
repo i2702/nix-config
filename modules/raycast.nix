@@ -48,6 +48,16 @@ let
           msg=$(osascript <<'APPLESCRIPT'
           on run
             tell application "System Events"
+              -- 補助アクセス (Accessibility) が無いと下の windows 列挙が -25211 で落ちる。
+              -- osascript が吐くのは "584:968" のような文字オフセットだけで、何の権限が
+              -- 足りないのかが読み取れない。UI elements enabled は権限が無くても読めて
+              -- (実測: 未許可の状態で false が返り exit 0)、しかも判定の主体が
+              -- 「このスクリプトを実行したアプリ」なので、実際に落ちる条件と一致する。
+              -- 先に見て、直し方の判る文言で返す。
+              if not (UI elements enabled) then
+                return "Raycast に補助アクセスの許可がありません。システム設定 → プライバシーとセキュリティ → アクセシビリティ で Raycast を許可してください (許可済みなら一度オフ/オンして Raycast を再起動)"
+              end if
+
               -- Why not (全プロセスを舐めない理由): 元にした版は background only でない
               -- プロセス全部のウィンドウを見ていたが、(1) System Events の AX 問い合わせは
               -- 1ウィンドウずつ IPC が走るので数秒かかり、ホットキーの応答としては遅すぎる、

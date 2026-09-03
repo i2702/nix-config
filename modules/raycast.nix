@@ -68,10 +68,22 @@ let
               tell application "Ghostty"
                 repeat with w in windows
                   if name of w contains "${match}" then
-                    -- Ghostty.sdef の activate window: "Activate a Ghostty window, bringing it
-                    -- to the front." アプリの前面化とウィンドウの選択を一度にやってくれる
-                    -- (実測: 別ウィンドウが前にある状態から呼んで front window が切り替わり、
-                    -- frontmost も true になる)。
+                    -- Why not (activate window 単独で済ませない理由): Ghostty.sdef の
+                    -- activate window は "bringing it to the front" を謳うが、Ghostty が背面に
+                    -- いる状態で呼ぶとアプリは前に出るもののウィンドウは直前に使っていた
+                    -- ものが選ばれ、目的のウィンドウには2回目の呼び出しでやっと届く
+                    -- (実測: Finder を前に出してから呼ぶと front window が変わらない。
+                    -- Ghostty が既に前面なら1回で切り替わる)。
+                    -- アプリの活性化がウィンドウの選択より後に完了し、その時点で活性化前の
+                    -- キーウィンドウが復元されて選択を上書きしていると見られる。
+                    -- 先にアプリを活性化して frontmost を確かめてから window を選ぶと一度で
+                    -- 届く (実測)。待ちループは実測では 0 周で抜けるが、活性化が遅れた場合の
+                    -- 保険として残す。
+                    activate
+                    repeat 20 times
+                      if frontmost then exit repeat
+                      delay 0.05
+                    end repeat
                     activate window w
                     return ""
                   end if

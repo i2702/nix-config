@@ -94,17 +94,36 @@ Raycast → Settings → Extensions → Script Commands → **Add Directories** 
 してあるので、ホットキーを押した瞬間にフォーカスが移る (引数つきにすると
 Raycast が入力欄を開いてしまい、ホットキー一発では飛べない)。
 
-### 補助アクセス (Accessibility)
+### オートメーション (Automation)
 
-ウィンドウの列挙と AXRaise は Accessibility API なので、**Raycast** に
-システム設定 → プライバシーとセキュリティ → アクセシビリティ の許可が要る。
-許可が無いと `Error: 584:968` のような文字オフセットだけのエラーになる(実体は
-`-25211` 補助アクセスは許可されません)。理由が読み取れないので、スクリプト側で
-`UI elements enabled` を先に見て「Raycast に補助アクセスの許可がありません」と
-出すようにしてある。この文言が出たらここを疑う。
+スクリプトは Ghostty 自身の AppleScript 辞書 (`Ghostty.app/Contents/Resources/Ghostty.sdef`、
+1.3.1 で確認) を叩く。Apple Events を Raycast から Ghostty へ送るので、**Raycast** に
+システム設定 → プライバシーとセキュリティ → **オートメーション** → Raycast → **Ghostty** の
+許可が要る。初回実行時に macOS がダイアログを出すので、そこで許可すれば済む。
 
-既に一覧に居るのに出る場合は、Raycast の更新で TCC のエントリが古くなっている。
-一度オフ/オンして Raycast を再起動する。
+補助アクセス (アクセシビリティ) は**要らない**。System Events を使わないため。
+
+許可が無いと `-1743` (Apple Events を送信する権限がありません) になる。スクリプト側で
+これを捕まえて「Raycast から Ghostty へ Apple Events を送る許可がありません」と
+出すようにしてあるので、この文言が出たらここを疑う。
+
+ダイアログで「許可しない」を押してしまった、あるいは一覧に Raycast が出てこない場合は
+TCC の記録を消してダイアログを出し直す:
+
+```bash
+tccutil reset AppleEvents com.raycast.macos
+```
 
 許可の主体は「スクリプトを実行したアプリ」なので、ターミナルから同じスクリプトを
-叩いて失敗しても Raycast 側の可否とは無関係。切り分けの材料にしないこと。
+叩けた/叩けなかったことは Raycast 側の可否とは無関係。切り分けの材料にしないこと。
+
+### 切り分け
+
+失敗した回だけ `~/.cache/raycast-focus-window.log` に
+`日時 rc=<終了コード> <実行されたパス> <メッセージ>` が1行残る。
+
+- 行が増えない / パスが `/nix/store/...` → Raycast が古い版を実行している。
+  ディレクトリを一度削除して追加し直す
+- 「Ghostty が起動していません」「タイトルに "Mac" を含む…ありません」 → 権限は通っている。
+  `osascript -e 'tell application "Ghostty" to get name of every window'` で実際の
+  タイトルを見る (ターミナルからは Ghostty 自身への送信なので許可なしで通る)

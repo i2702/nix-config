@@ -12,6 +12,16 @@ let
   # Windows 機へ ssh している間は "󰖳 Win"。つまり「タイトルが Win のウィンドウ」は
   # 「今 Windows 機に繋がっているペインを含む Ghostty ウィンドウ」と同義になる。
   #
+  # Why not (System Events 経由にしない理由): 元にした版は System Events で全プロセスの
+  # ウィンドウを舐めて AXRaise していた。これは Accessibility API なので Raycast に
+  # 補助アクセスの許可が要り、さらに System Events へ Apple Events を送る Automation の
+  # 許可も別途要る (実測: 後者が無いと -1743 で落ちる)。2種類の権限を GUI で通す手間の
+  # わりに、Raycast から起動された osascript にどちらが帰属するかも読みにくい。
+  # Ghostty 1.3.1 は自前の AppleScript 辞書 (Ghostty.app/Contents/Resources/Ghostty.sdef)
+  # を持ち、window の name と `activate window` コマンドを公開している。こちらなら
+  # 必要なのは「Raycast → Ghostty」の Automation 1つだけで、初回実行時に macOS が
+  # 自動でダイアログを出す。補助アクセスは一切要らない。
+  #
   # Why not (引数つきの1コマンドにしない理由): Raycast の Script Command は引数を取れるが、
   # ホットキーを割り当てても引数の入力欄が開くだけで、そこから Mac / Win を打たされる。
   # 欲しいのは「ホットキー一発で目的のウィンドウへ飛ぶ」ことなので、行き先ごとに
@@ -47,44 +57,36 @@ let
           # osascript は stdout / stderr とも空なので、混ぜても成功時に喋ることはない。
           msg=$(osascript 2>&1 <<'APPLESCRIPT'
           on run
-            tell application "System Events"
-              -- 補助アクセス (Accessibility) が無いと下の windows 列挙が -25211 で落ちる。
-              -- osascript が吐くのは "584:968" のような文字オフセットだけで、何の権限が
-              -- 足りないのかが読み取れない。UI elements enabled は権限が無くても読めて
-              -- (実測: 未許可の状態で false が返り exit 0)、しかも判定の主体が
-              -- 「このスクリプトを実行したアプリ」なので、実際に落ちる条件と一致する。
-              -- 先に見て、直し方の判る文言で返す。
-              if not (UI elements enabled) then
-                return "Raycast に補助アクセスの許可がありません。システム設定 → プライバシーとセキュリティ → アクセシビリティ で Raycast を許可してください (許可済みなら一度オフ/オンして Raycast を再起動)"
-              end if
+            -- `tell application "Ghostty"` の中で windows を触ると、Ghostty が居なければ
+            -- 起動してしまう。このコマンドの目的は「既にあるウィンドウへ飛ぶ」ことなので、
+            -- 勝手に起動させず先に弾く。`is running` は起動を伴わずに読める。
+            if not (application "Ghostty" is running) then
+              return "Ghostty が起動していません"
+            end if
 
-              -- Why not (全プロセスを舐めない理由): 元にした版は background only でない
-              -- プロセス全部のウィンドウを見ていたが、(1) System Events の AX 問い合わせは
-              -- 1ウィンドウずつ IPC が走るので数秒かかり、ホットキーの応答としては遅すぎる、
-              -- (2) "Mac" / "Win" はブラウザのタブ名にも普通に現れるため、Ghostty より先に
-              -- 見つかった無関係なウィンドウを前面に出してしまう。探す先は Ghostty に限る。
-              --
-              -- プロセス名は実測で小文字の "ghostty" (.app 内の実行ファイル名)。
-              -- AppleScript の文字列比較は既定で大文字小文字を区別しないので、将来
-              -- "Ghostty" に変わってもこのまま通る。
-              if not (exists application process "ghostty") then
-                return "ghostty が起動していません"
-              end if
-
-              tell application process "ghostty"
+            try
+              tell application "Ghostty"
                 repeat with w in windows
                   if name of w contains "${match}" then
-                    -- AXRaise と frontmost の両方が要る。AXRaise はアプリ内での重なり順を
-                    -- 上げるだけでアプリ自体は前に出ず、frontmost はアプリを前に出すだけで
-                    -- どのウィンドウが最前面かは選べない。2つ揃って初めて
-                    -- 「目的のウィンドウが最前面」になる。
-                    perform action "AXRaise" of w
-                    set frontmost to true
+                    -- Ghostty.sdef の activate window: "Activate a Ghostty window, bringing it
+                    -- to the front." アプリの前面化とウィンドウの選択を一度にやってくれる
+                    -- (実測: 別ウィンドウが前にある状態から呼んで front window が切り替わり、
+                    -- frontmost も true になる)。
+                    activate window w
                     return ""
                   end if
                 end repeat
               end tell
-            end tell
+            on error errText number errNum
+              -- -1743 は Apple Events の送信が許可されていない (Automation 未許可)。
+              -- osascript の素のエラーは文字オフセットと定型文だけで、どの設定画面を
+              -- 開けばよいかが伝わらないので、ここで直し方に書き換える。
+              if errNum is -1743 then
+                return "Raycast から Ghostty へ Apple Events を送る許可がありません。システム設定 → プライバシーとセキュリティ → オートメーション → Raycast → Ghostty を ON にしてください"
+              end if
+              return errText & " (" & errNum & ")"
+            end try
+
             return "タイトルに \"${match}\" を含む Ghostty のウィンドウがありません"
           end run
           APPLESCRIPT

@@ -145,7 +145,7 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 
 - **Ghostty**（`modules/ghostty.nix`）: `macos-option-as-alt` で Option を Alt として送出（herdr の Alt バインド用）。ネイティブタブ・split 系キー（`cmd+t` / `cmd+[` / `cmd+]` など）は herdr のワークスペース切替と競合するため `unbind`。
 - **Zed CLI**: macOS では `zed` が PATH に無いため、`z` / `za` エイリアスを `Zed.app` 同梱 CLI の絶対パスに割り当て。
-- **Raycast Script Command**（`modules/raycast.nix`）: `~/.config/raycast/scripts` に Focus Mac Window / Focus Win Window を配置。ウィンドウタイトル（`modules/zsh.nix` が出す " Mac" / "󰖳 Win"）で Ghostty のウィンドウを探し、ホットキー一発で前面に出す。ディレクトリの登録と Raycast への Accessibility 許可は手動（MANUAL.md）。
+- **Raycast Script Command**（`modules/raycast.nix`）: `~/.config/raycast/scripts` に Focus Mac Window / Focus Win Window を配置。ウィンドウタイトル（`modules/zsh.nix` が出す " Mac" / "󰖳 Win"）で Ghostty のウィンドウを探し、ホットキー一発で前面に出す。Ghostty 自身の AppleScript 辞書（`activate window`）を使うので補助アクセスは不要。ディレクトリの登録と Raycast → Ghostty の Automation 許可は手動（MANUAL.md）。
 
 > `modules/wezterm.nix` は Linux（WSL）でのみ、`modules/ghostty.nix` は Darwin でのみ配置される。
 

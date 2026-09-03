@@ -30,7 +30,9 @@ in
   # (設定変更はこのモジュールを編集して home-manager switch で反映する)。
   xdg.configFile."gwq/config.toml".text = ''
     [cd]
-    auto_cd_on_add = false
+    # shim (__GWQ_CD_SHIM) 経由のときだけ効くフラグなので、
+    # スクリプトやエージェントの非対話 `gwq add` の挙動は変わらない。
+    auto_cd_on_add = true
     # サブシェル起動(true)にしないのは、herdr がペイン cwd を
     # 「OSC 7 報告 → ペイン直下のルートシェルのプロセス cwd」の順で解決するため。
     # サブシェル方式だとルートシェルは元のディレクトリのまま gwq を待ってブロックし、

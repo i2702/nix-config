@@ -2,6 +2,7 @@
   # Mac でしか使わないモジュール。共通の home.nix ではなくここから import する。
   imports = [
     ../modules/m1ddc.nix
+    ../modules/raycast.nix
   ];
 
   # Macの実際のログインユーザー名に合わせて調整すること(現時点では未確定のため

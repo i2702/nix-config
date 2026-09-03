@@ -42,10 +42,10 @@ let
           # 失敗したときだけ喋る。mode silent の Raycast は stdout の最終行を HUD に出すので、
           # 成功時に何か書くと毎回トーストが出て邪魔になる。
           #
-          # osascript 自体が失敗した場合 (補助アクセス未許可の -25211 など) は msg が空になる。
-          # 握り潰すと「押しても何も起きない」だけになって原因が判らないので、終了コードを
-          # そのまま返して Raycast にエラーとして出させる (メッセージは osascript の stderr)。
-          msg=$(osascript <<'APPLESCRIPT'
+          # stderr も stdout へ混ぜるのは、AppleScript の実行時エラーを osascript が stderr へ
+          # 書くため。捨てると「押しても何も起きない」になって原因が辿れない。成功時の
+          # osascript は stdout / stderr とも空なので、混ぜても成功時に喋ることはない。
+          msg=$(osascript 2>&1 <<'APPLESCRIPT'
           on run
             tell application "System Events"
               -- 補助アクセス (Accessibility) が無いと下の windows 列挙が -25211 で落ちる。
@@ -88,11 +88,25 @@ let
             return "タイトルに \"${match}\" を含む Ghostty のウィンドウがありません"
           end run
           APPLESCRIPT
-          ) || exit $?
+          )
+          rc=$?
+
+          # 切り分け用のログ。成功時は書かない (modules/wezterm.nix の wezterm-focus.log と
+          # 同じ方針で、失敗の切り分けのためだけに残す)。
+          #
+          # $0 を残すのが肝。nix の生成物は switch のたびに store パスが変わるので、
+          # Raycast がディレクトリ走査時に symlink を解決して realpath を握っていると、
+          # 更新しても古い版を実行し続ける。そのときここには古い store パスが出る。
+          # ログ行がそもそも増えないなら、ログを書かない更に古い版が動いている。
+          if [[ $rc -ne 0 || -n "$msg" ]]; then
+            mkdir -p "$HOME/.cache"
+            printf '%s  rc=%s  %s  %s\n' "$(date '+%F %T')" "$rc" "$0" "$msg" >> "$HOME/.cache/raycast-focus-window.log"
+          fi
 
           if [[ -n "$msg" ]]; then
             echo "$msg"
           fi
+          exit $rc
         '';
       };
     };

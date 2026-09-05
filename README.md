@@ -57,7 +57,8 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 │   ├── herdr.nix          # ターミナルマルチプレクサ（自動起動）
 │   └── ghostty.nix  wezterm.nix
 └── templates/
-    └── git-config.local.example   # git identity のテンプレート
+    ├── git-config.local.example       # git identity のテンプレート
+    └── wsl-keepalive-task.xml.example # WSL の distro を保持するタスク定義 (WSL 機のみ)
 ```
 
 ---

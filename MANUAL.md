@@ -127,3 +127,73 @@ tccutil reset AppleEvents com.raycast.macos
 - 「Ghostty が起動していません」「タイトルに "Mac" を含む…ありません」 → 権限は通っている。
   `osascript -e 'tell application "Ghostty" to get name of every window'` で実際の
   タイトルを見る (ターミナルからは Ghostty 自身への送信なので許可なしで通る)
+
+---
+
+## WSL の sshd (:2222) を常時上げておく
+
+Windows 機の WSL へ外から入るための設定。`modules/wezterm.nix` の SSH ドメイン
+(`127.0.0.1:2222`) と `modules/zsh.nix` の `ssh wsl` がこれに乗っている。
+
+WSL の distro は Windows を起動しただけでは立ち上がらず、`wsl.exe` のクライアントが
+1つも居なくなると落ちる。SSH で入る使い方は `wsl.exe` を経由しないため、放っておくと
+**「ターミナルを開くまで 2222 番に繋がらない」** 状態になる。防いでいるのは次の 2つで、
+どちらも Windows 側にあるため nix からは宣言できない。
+
+### `C:\Users\<user>\.wslconfig`
+
+```ini
+[wsl2]
+networkingMode=Mirrored
+vmIdleTimeout=-1
+```
+
+`vmIdleTimeout` の既定は 60000ms で、最後の `wsl.exe` クライアントが消えてから 1分で
+VM が落ちる。`-1` で無効化する。ただしこれは VM の寿命の話で、distro インスタンスの
+アイドル終了は止められない。それが次のタスク。
+
+### タスクスケジューラ `\WSL-KeepAlive`
+
+`wsl.exe -d Ubuntu --exec sleep infinity` を常駐させ、distro を掴んで落ちないようにする。
+定義は `templates/wsl-keepalive-task.xml.example`。トリガーは 3本:
+
+| トリガー | 設定 | 役割 |
+| --- | --- | --- |
+| TimeTrigger | 開始 2026-01-01、5分間隔・無期限 | 死んだときの復旧 |
+| BootTrigger | 遅延 30秒 | 起動直後に素早く立てる |
+| EventTrigger | Power-Troubleshooter id=1、遅延 15秒 | スリープ/休止からの復帰 |
+
+**繰り返しは `TimeTrigger` に持たせる。** `BootTrigger` 配下に置いた繰り返しは、その起動
+トリガーが発火した時点から始まる仕様なので、登録し直した回は次のブートまで効かない
+(`Get-ScheduledTaskInfo` の `NextRunTime` が空になる)。`StartBoundary` を過去に置いた
+`TimeTrigger` なら登録直後から回る。
+
+`MultipleInstancesPolicy=IgnoreNew` が要。生きている間は 5分ごとの発火が「既に実行中」
+(タスクスケジューラのイベント id=322) として捨てられ、`sleep infinity` が死んだときだけ
+新しいものが立つ。
+
+登録には UAC 昇格が要る。ルートフォルダのタスクなので、昇格しないと
+`Register-ScheduledTask` が `Access is denied` になる。
+
+### 切り分け
+
+2222 番に繋がらないとき、**sshd の設定から見ない**。まず distro が生きているかを見る:
+
+```bash
+ps -eo etime,args | grep '[s]leep infinity'  # 無ければ KeepAlive が効いていない
+uptime -s                                    # WSL の起動時刻
+```
+
+WSL の起動時刻が Windows の起動時刻(`Get-CimInstance Win32_OperatingSystem`)より
+大幅に後なら、ターミナルを開いた時に初めて起きている。Windows 側では:
+
+```powershell
+Get-ScheduledTaskInfo -TaskName 'WSL-KeepAlive'   # NextRunTime が空なら繰り返しが効いていない
+```
+
+`journalctl --list-boots` の最終エントリと、タスクスケジューラのイベント id=201
+(アクション終了) の時刻が一致していたら、distro が落ちて `sleep infinity` も
+道連れになった回。
+
+なお `unattended-upgrades` が openssh-server を更新すると sshd が数秒落ちる。
+これは distro の停止とは別件で、`journalctl -u ssh` に再起動の記録が残る。

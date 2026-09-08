@@ -2,6 +2,8 @@
 {
   # Ghostty 本体は GUI アプリのため nix では管理せず(/Applications/Ghostty.app)、
   # 設定ファイル ~/.config/ghostty/config の配置のみ行う。
+  # 本体は安定版ではなく tip チャンネル (brew の ghostty@tip) を入れる。
+  # ATOK の変換確定が安定版で壊れるため。理由と stable へ戻してよい条件は MANUAL.md 参照。
   xdg.configFile."ghostty/config".text = ''
     # Ghostty 組み込みテーマ(+list-themes で確認可)。zed / neovim / delta と配色を統一。
     # OS の外観に追従させたい場合は theme = light:Catppuccin Latte,dark:Catppuccin Mocha 形式。

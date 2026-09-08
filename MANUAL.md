@@ -197,3 +197,39 @@ Get-ScheduledTaskInfo -TaskName 'WSL-KeepAlive'   # NextRunTime が空なら繰�
 
 なお `unattended-upgrades` が openssh-server を更新すると sshd が数秒落ちる。
 これは distro の停止とは別件で、`journalctl -u ssh` に再起動の記録が残る。
+
+---
+
+## Ghostty は tip チャンネルを使う
+
+```sh
+brew uninstall --cask ghostty
+brew install --cask ghostty@tip
+```
+
+**安定版 (1.3.1) では ATOK の変換確定が壊れる。** 変換中 (marked text がある状態) に
+Ctrl 系のキーを押すと、Ghostty が IME と端末の両方へそのキーを流す。ATOK が Ctrl-N で
+変換を確定する一方、`\x0e` が端末側にも届き、確定した文字列を受け取った直後のアプリが
+それを潰す (neovim なら nvim-cmp の `<C-n>`、zsh なら `down-line-or-history`)。
+
+修正は [ghostty#12518](https://github.com/ghostty-org/ghostty/pull/12518)
+"macos: suppress control-char input while composing" (2026-04-30 merge)。
+`v1.3.1` はこのコミットより 875 commit 手前で、**安定版の最新タグにはまだ入っていない**。
+tip は main の各コミットから作られるため、こちらには入っている
+(導入時: `1.3.2-main-+f426f6f18`)。
+
+- **`brew install --cask ghostty` に戻さない。** 戻すとこの症状が再発する
+- **戻してよくなる条件**: `v1.3.2` 以降の安定版が出たとき。`gh api
+  repos/ghostty-org/ghostty/compare/v<tag>...4dcb09ada0c0909717d92547623b26eafa50ca8a`
+  が `behind_by > 0` を返せば、そのタグに修正が入っている
+- 設定パス (`~/.config/ghostty`)・bundle ID・app パスは安定版と同じなので、
+  `modules/ghostty.nix` が書く設定はそのまま使える
+- tip は 1 日に複数回更新され、`auto-update-channel` は起動中のチャンネルに追従するため、
+  以後 Sparkle が tip を追い続ける。特定ビルドで止めたいときだけ config に
+  `auto-update = off` を足す
+
+### 代替案 (採らなかった)
+
+`keybind = ctrl+n=ignore` でも直る。`ignore` は端末へ転送しないが OS/IME には渡るため
+(`ghostty(5)` の KEYBIND ACTIONS)、ATOK 側の確定は動く。採らなかったのは、変換中かどうかに
+関係なく Ctrl-N が端末へ一切届かなくなり、nvim-cmp の `<C-n>` が死ぬため。

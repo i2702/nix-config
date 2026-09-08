@@ -33,7 +33,11 @@ usage() {
 
 判定と削除の対応:
   ancestor / patch-id / pr のいずれかで取り込み済みと確認できたブランチだけを消す。
-  ancestor 以外は git branch -d が拒むため -D を使う(取り込み確認はスクリプト側で済んでいる)。
+  削除は常に git branch -D。-d は --base ではなく HEAD を基準に判定するため、
+  --base に HEAD 以外を渡すと取り込み済みでも拒む(取り込み確認はスクリプト側で済んでいる)。
+
+  1 件の失敗で残りを放置しないよう、ブランチごとに独立して処理する。
+  失敗があった場合は末尾に一覧を出し、終了コード 1 で終わる。
 USAGE
 }
 
@@ -185,9 +189,10 @@ remove_orphan_dir() {
   fi
 }
 
-for entry in "${DELETE_LIST[@]}"; do
-  b="${entry%%	*}"; rest="${entry#*	}"
-  method="${rest%%	*}"; wt="${rest#*	}"
+# ブランチ 1 本を片付ける。ワークツリー → ブランチ → origin の順。
+# 呼び出し側が成否を見るので、途中で失敗したらそこで戻る(set -e はこの関数内では効かない)。
+delete_one() {
+  local b="$1" wt="$2"
 
   if [ -n "$wt" ]; then
     # ワークツリーの管理主体は gwq に一本化する([[git-worktree]])。ただし gwq は
@@ -197,27 +202,54 @@ for entry in "${DELETE_LIST[@]}"; do
       command gwq remove -b "$b" >/dev/null 2>&1 || true
     fi
     if [ -n "$(worktree_of "$b")" ]; then
-      git worktree remove --force "$wt"
+      git worktree remove --force "$wt" || return 1
     fi
     git worktree prune
-    [ -d "$wt" ] && remove_orphan_dir "$wt" || echo "removed  worktree         $wt"
+    if [ -d "$wt" ]; then
+      remove_orphan_dir "$wt"
+    else
+      echo "removed  worktree         $wt"
+    fi
   fi
 
   if git show-ref --verify --quiet "refs/heads/$b"; then
-    # ancestor 以外は -d が拒む。取り込み確認は上で済ませているので -D を使う
-    if [ "$method" = "ancestor" ]; then
-      git branch -d "$b" >/dev/null
-    else
-      git branch -D "$b" >/dev/null
-    fi
+    # 常に -D を使う。-d は「HEAD(かその upstream)に入っているか」を見るので、
+    # --base に HEAD 以外を渡すと取り込み済みでも "not fully merged" で拒む。
+    # 見るべきは --base への取り込みで、それは上の 3 段の突合で確定済みである。
+    git branch -D "$b" >/dev/null || return 1
     echo "removed  branch           $b"
   else
     echo "removed  branch           $b (gwq が削除済み)"
   fi
 
   if [ "$REMOTE" -eq 1 ] && git rev-parse --verify --quiet "origin/$b" >/dev/null; then
-    git push --quiet origin --delete "$b" && echo "removed  origin           $b"
+    git push --quiet origin --delete "$b" || return 1
+    echo "removed  origin           $b"
+  fi
+  return 0
+}
+
+# 1 本の失敗で残りを放置しない。ワークツリーだけ消えてブランチが残る、といった
+# 中途半端な状態を作らないため、失敗は記録して次のブランチへ進む
+FAILED=()
+for entry in "${DELETE_LIST[@]}"; do
+  b="${entry%%	*}"; rest="${entry#*	}"
+  wt="${rest#*	}"
+
+  if delete_one "$b" "$wt"; then
+    :
+  else
+    echo "failed   branch           $b (手動で確認してください)" >&2
+    FAILED+=("$b")
   fi
 done
+
+if [ ${#FAILED[@]} -gt 0 ]; then
+  # 「完了 N 件」だと何も起きなかったように読めるので、最後まで片付いた数と
+  # 手当てが要るブランチを分けて出す(途中まで進んでいることがある)
+  echo "最後まで片付いたのは $(( ${#DELETE_LIST[@]} - ${#FAILED[@]} ))/${#DELETE_LIST[@]} 件" >&2
+  echo "手動で確認: ${FAILED[*]}" >&2
+  exit 1
+fi
 
 echo "完了: ${#DELETE_LIST[@]} 件"

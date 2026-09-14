@@ -52,6 +52,12 @@ let
         --token "name=$2" "''${branch[@]}" --token "dir=''${dir[-80,-1]}" >/dev/null 2>&1
     }
   '';
+
+  # Claude Code のセッション cwd を、ペインごとに1ファイル(中身はフルパス1行)で置く場所。
+  # フック(claude-pane-label.zsh)が書き、claude ラッパーが終了時に消し、split-pane.sh と
+  # space-label-follow.zsh が読む。herdr のトークンに置かない理由: 値は先頭80文字に切られて
+  # フルパスを復元できず、live-handoff でも消えるため。
+  claudeCwdDir = "${config.xdg.stateHome}/herdr/claude-cwd";
 in
 {
   # herdr: AIエージェント時代のターミナルマルチプレクサ (https://herdr.dev)
@@ -101,14 +107,14 @@ in
     focus_pane_up = "alt+k"
     focus_pane_right = "alt+l"
 
-    # 方向指定の分割(herdr 標準動作: フォーカス中ペインを割る)。
-    #   Alt-v = 右に分割(縦線。vim の :vsplit と同じ向き) / Alt-s = 下に分割(横線)
-    # 方向を自動判定してグリッドを保つ「自動タイル分割」は Alt-f(下の [[keys.command]])。
+    # 方向指定の分割: Alt-v = 右に分割(縦線。vim の :vsplit と同じ向き) / Alt-s = 下に分割(横線)。
+    # 方向を自動判定してグリッドを保つ「自動タイル分割」は Alt-f。3つとも下の [[keys.command]] で
+    # split-pane.sh を呼ぶ(ネイティブの split_vertical / split_horizontal にしない理由は同スクリプト参照)。
     # 以前は Alt-v / Alt-s の両方を自動タイルに充てて方向指定を prefix 側(Alt-t → v/s)に
     # 追いやっていたが、2キーが同じ動作で冗長なうえ v/s が方向を連想させるのに区別されず、
-    # 「ここを右に割りたい」ときに2打必要だったので入れ替えた。prefix 側は標準のまま残す。
-    split_vertical = ["prefix+v", "alt+v"]
-    split_horizontal = ["prefix+s", "alt+s"]
+    # 「ここを右に割りたい」ときに2打必要だったので入れ替えた。prefix 側はネイティブのまま残す。
+    split_vertical = "prefix+v"
+    split_horizontal = "prefix+s"
 
     # Alt-q でペインを閉じる
     close_pane = "alt+q"
@@ -145,15 +151,26 @@ in
     # 他のタブ操作キー(next_tab 等)はタブが増えない限り無害なのでデフォルトのまま放置。
     new_tab = ""
 
-    # 自動タイル分割: Alt-f でフォーカス中タブに新ペインを追加して均等グリッドを保つ。
-    # type = "shell" はバックグラウンド実行で、スクリプトが herdr CLI 経由で
-    # 「一番大きいペインを長辺方向に分割」する。これによりペイン4つで必ず 2x2 になる。
-    # 方向を明示したいときは Alt-v / Alt-s(keys の split_vertical / split_horizontal)。
+    # 分割。type = "shell" はバックグラウンド実行で、split-pane.sh が herdr CLI 経由で分割する。
+    #   Alt-f = 自動タイル分割: 一番大きいペインを長辺方向に割り、ペイン4つで必ず 2x2 になる
+    #   Alt-v / Alt-s = フォーカス中のペインを右 / 下に割る
     [[keys.command]]
     key = "alt+f"
     type = "shell"
-    command = "~/.config/herdr/scripts/autotile-split.sh"
+    command = "~/.config/herdr/scripts/split-pane.sh auto"
     description = "自動タイル分割(グリッドに追加)"
+
+    [[keys.command]]
+    key = "alt+v"
+    type = "shell"
+    command = "~/.config/herdr/scripts/split-pane.sh right"
+    description = "右に分割"
+
+    [[keys.command]]
+    key = "alt+s"
+    type = "shell"
+    command = "~/.config/herdr/scripts/split-pane.sh down"
+    description = "下に分割"
 
     # エージェント/ターミナルのペイン間フォーカス移動。
     # herdr の native な focus_agent はインデックス型(prefix+alt+1..9)しかなく、
@@ -207,8 +224,10 @@ in
 
     [terminal]
     # 新規ペイン/タブはカレントディレクトリを引き継ぐ
-    # follow は「起動時」ではなく「現在(cd 後)」のディレクトリを引き継ぐ。自動タイル分割の
-    # スクリプト側でも --cwd を明示しているため二重に確実。
+    # follow は「起動時」ではなく「現在(cd 後)」のディレクトリを引き継ぐ。ただし前面プロセスの
+    # cwd を優先するため、Claude Code のペインでは起動ディレクトリになる。キー操作の分割
+    # (split-pane.sh)は --cwd を明示してこれを避けるが、マウス操作や prefix+v / prefix+s の分割は
+    # この follow のまま。
     new_cwd = "follow"
 
     [theme]
@@ -252,32 +271,52 @@ in
     kitty_graphics = true
   '';
 
-  # 自動タイル分割スクリプト(Alt-f から呼ばれる)。
-  # フォーカス中タブの「一番大きいペイン」を長辺方向に分割する。端末セルは縦:横 ≒ 2:1 なので
-  # 幅 > 2*高さ なら右(縦線)分割、そうでなければ下(横線)分割。これを繰り返すとタブは常に
-  # 均等グリッドに保たれ、ペインが4つになると自動的に 2x2 になる。
-  # 新ペインはフォーカス中ペインのカレントディレクトリ(HERDR_ACTIVE_PANE_CWD)を引き継ぐ。
-  # herdr の layout.apply は端末を作り直す破壊的動作なので、非破壊なこの逐次分割方式を採る。
-  xdg.configFile."herdr/scripts/autotile-split.sh" = {
+  # ペイン分割スクリプト(Alt-f / Alt-v / Alt-s から呼ばれる)。引数: auto | right | down。
+  #   auto         = 自動タイル分割。フォーカス中タブの「一番大きいペイン」を長辺方向に分割する。
+  #                  端末セルは縦:横 ≒ 2:1 なので幅 > 2*高さ なら右(縦線)、そうでなければ下(横線)。
+  #                  これを繰り返すとタブは常に均等グリッドに保たれ、ペイン4つで自動的に 2x2 になる。
+  #                  herdr の layout.apply は端末を作り直す破壊的動作なので、非破壊なこの逐次分割方式を採る。
+  #   right / down = フォーカス中のペインをその向きに分割する。
+  # 新ペインのディレクトリは --cwd で明示する。シェルのペインなら herdr が渡す HERDR_ACTIVE_PANE_CWD、
+  # Claude Code のペインならフックが claudeCwdDir に残したセッション cwd(= space 名が示す場所)。
+  # ネイティブの分割(new_cwd = "follow")に任せない理由: follow はペインの前面プロセスの cwd を
+  # 最優先する(PaneRuntime::follow_cwd)。Claude Code は中で移動してもプロセスの cwd が起動時のまま
+  # なので、space 名は移動先のワークツリーを示しているのに新ペインは起動ディレクトリで開いていた。
+  xdg.configFile."herdr/scripts/split-pane.sh" = {
     text = ''
       #!/bin/bash
       set -eu
       herdr="''${HERDR_BIN_PATH:-herdr}"
       jq="${pkgs.jq}/bin/jq"
       active="''${HERDR_ACTIVE_PANE_ID:?HERDR_ACTIVE_PANE_ID is not set}"
+      mode="''${1:-auto}"
 
-      # 現在タブのレイアウトから、最大面積のペインとその分割方向を求める。
-      read -r target dir < <(
-        "$herdr" pane layout --pane "$active" \
-          | "$jq" -r '.result.layout.panes
-              | max_by(.rect.width * .rect.height)
-              | "\(.pane_id) \(if .rect.width > (2 * .rect.height) then "right" else "down" end)"'
-      )
-      [ -n "''${target:-}" ] || exit 0
+      if [ "$mode" = auto ]; then
+        # 現在タブのレイアウトから、最大面積のペインとその分割方向を求める。
+        read -r target dir < <(
+          "$herdr" pane layout --pane "$active" \
+            | "$jq" -r '.result.layout.panes
+                | max_by(.rect.width * .rect.height)
+                | "\(.pane_id) \(if .rect.width > (2 * .rect.height) then "right" else "down" end)"'
+        )
+        [ -n "''${target:-}" ] || exit 0
+      else
+        target=$active
+        dir=$mode
+      fi
 
-      # 新ペインはフォーカス中ペインのカレントディレクトリを引き継ぐ。
-      # 取得できなければ config の new_cwd = "follow" に委ねる。
+      # 新ペインのディレクトリ。Claude Code のペインならセッション cwd を優先する。
+      # ファイルがあるだけで信じず agent を確かめるのは、ラッパーを通らず終了した claude の
+      # 残骸ファイルで、シェルに戻ったペインを古いディレクトリへ飛ばさないため。
       cwd="''${HERDR_ACTIVE_PANE_CWD:-}"
+      claude_cwd_file="${claudeCwdDir}/$active"
+      if [ -f "$claude_cwd_file" ] \
+        && [ "$("$herdr" pane get "$active" | "$jq" -r '.result.pane.agent // empty')" = claude ]; then
+        claude_cwd=$(<"$claude_cwd_file")
+        [ -d "$claude_cwd" ] && cwd=$claude_cwd
+      fi
+
+      # 取得できなければ config の new_cwd = "follow" に委ねる。
       if [ -n "$cwd" ]; then
         "$herdr" pane split --pane "$target" --direction "$dir" --cwd "$cwd" --focus
       else
@@ -390,6 +429,9 @@ in
       dir=$(${pkgs.jq}/bin/jq -r '.cwd // empty')
       [[ -d "$dir" ]] || exit 0
       ${paneLabelFns}
+      # split-pane.sh と space-label-follow.zsh 用に、セッション cwd をフルパスで残す。
+      # 報告より先に書くのは、報告の pane.updated を受けた常駐側がこのファイルを読むため。
+      mkdir -p "${claudeCwdDir}" && print -r -- "$dir" > "${claudeCwdDir}/$HERDR_PANE_ID"
       _herdr_label_for "$dir"
       _herdr_report_pane "$HERDR_PANE_ID" "''${reply[1]}" "''${reply[2]}" "$dir"
       exit 0
@@ -405,8 +447,9 @@ in
   # 報告を鵜呑みにしない理由: 報告しないシェル(この仕組みより前の .zshrc を読んだまま)や
   # 手動の pane rename があると、名前とブランチが別の時点・別のディレクトリの値になる。
   # 実際に ~/worktrees/.../nix-config/foobar で "foobar" と古い "main" が組み合わさって出た。
-  # 確かめ方: name があり、dir トークンが cwd の末尾80文字と一致すれば信じる。Claude の
-  # ペイン(agent あり)は中で移動してもペインの cwd が変わらないので、dir を比べずに信じる。
+  # 確かめ方: name があり、dir トークンが基準ディレクトリの末尾80文字と一致すれば信じる。基準は
+  # ペインの cwd だが、Claude Code のペイン(agent あり)は中で移動してもペインの cwd が起動時の
+  # ままなので、フックが claudeCwdDir に残したセッション cwd を基準にする。
   # herdr 組み込みの branch トークンを使わない理由: 組み込みのブランチ(と自動 space 名)は、space の
   # 「最初のタブの root ペイン」の cwd から引かれる(Workspace::resolved_identity_cwd_from)。
   # root 以外のペインで移動しても変わらず、root ペインがリポジトリ外に居ればブランチは出ない。
@@ -474,17 +517,21 @@ in
       # reply=(<名前> <ブランチ>) に入れる。$7 が空でなければ覚えを使わず引き直す
       # (フォーカス時。報告しないシェルで cd を伴わず git switch した場合を拾う)。
       resolve_pane() {
-        if [[ -n "$4" && ( -n "$3" || "$6" == "''${2[-80,-1]}" ) ]]; then
+        local base=$2
+        if [[ -n "$3" && -f "${claudeCwdDir}/$1" ]]; then
+          base=$(<"${claudeCwdDir}/$1")
+        fi
+        if [[ -n "$4" && "$6" == "''${base[-80,-1]}" ]]; then
           reply=("$4" "$5")
           return
         fi
-        [[ -d "$2" ]] || return 1
-        if [[ -z "$7" && "''${computed_cwd[$1]}" == "$2" ]]; then
+        [[ -d "$base" ]] || return 1
+        if [[ -z "$7" && "''${computed_cwd[$1]}" == "$base" ]]; then
           reply=("''${computed_name[$1]}" "''${computed_branch[$1]}")
           return
         fi
-        _herdr_label_for "$2"
-        computed_cwd[$1]=$2 computed_name[$1]=''${reply[1]} computed_branch[$1]=''${reply[2]}
+        _herdr_label_for "$base"
+        computed_cwd[$1]=$base computed_name[$1]=''${reply[1]} computed_branch[$1]=''${reply[2]}
       }
 
       # focus イベントは表示値を持たない(workspace.focused はペイン ID すら無い)ので引き直す。
@@ -608,12 +655,14 @@ in
       # ユーザー/プロジェクトの設定とは併合される。
       # 終了後に _herdr_label を捨て、次の precmd でシェル自身の cwd の名前へ付け直させる
       # (--clear は境界ラベルまでは消さないため、agent rename の連番付きラベル "repo~2" や
-      # Claude 内で移動した先の名前が残るのを防ぐ)。
+      # Claude 内で移動した先の名前が残るのを防ぐ)。フックが残したセッション cwd のファイルも消し、
+      # シェルに戻ったペインの分割先や space 名がセッションの移動先に引きずられないようにする。
       claude() {
         _herdr_name_by_cwd
         command claude --settings ~/.config/herdr/claude-settings.json "$@"
         local ret=$?
         herdr agent rename "$HERDR_PANE_ID" --clear >/dev/null 2>&1
+        rm -f "${claudeCwdDir}/$HERDR_PANE_ID"
         _herdr_label=""
         return $ret
       }

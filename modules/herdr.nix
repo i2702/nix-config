@@ -1,4 +1,39 @@
-{ pkgs, lib, ... }:
+{ config, pkgs, lib, ... }:
+let
+  # ペイン名を "<リポジトリ名>(<ブランチ名>)"、リポジトリ外ならディレクトリ名にする zsh 関数。
+  # 素のシェル(initContent の precmd)と Claude Code のフック(claude-pane-label.zsh)で
+  # 同じ名前を出すため、両方へこの定義をそのまま埋め込む。
+  #
+  # リポジトリ名を --show-toplevel の basename にしない理由: gwq のワークツリーは
+  # "sub-feature-xxx" のようなブランチ由来のディレクトリ名になり、どのリポジトリか分からない。
+  # 共通 git ディレクトリ(本体の .git)の親から取ればワークツリーでも本体の名前になる。
+  # 共通ディレクトリが .git で終わらない(サブモジュール/ベアリポジトリ)ときだけ toplevel に戻す。
+  # rev-parse を1回にまとめているのは、precmd で毎プロンプト走るため(実測 ~6ms)。
+  paneLabelFn = ''
+    _herdr_label_for() {
+      local dir=$1 out common top branch repo
+      out=$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir --show-toplevel --abbrev-ref HEAD 2>/dev/null)
+      local -a info=("''${(@f)out}")
+      common=''${info[1]} top=''${info[2]} branch=''${info[3]}
+      if [[ -z "$common" || -z "$top" ]]; then
+        if [[ "$dir" == "$HOME" ]]; then print -r -- "~"
+        elif [[ "$dir" == / ]]; then print -r -- /
+        else print -r -- "''${dir:t}"
+        fi
+        return
+      fi
+      # --abbrev-ref が名前を返せない(空 or "HEAD")のは、コミットの無い新規リポジトリか detached HEAD。
+      # 前者は symbolic-ref でブランチ名が引け、後者は失敗するので短縮 SHA にする。
+      if [[ -z "$branch" || "$branch" == HEAD ]]; then
+        branch=$(git -C "$dir" symbolic-ref --short -q HEAD) \
+          || branch=$(git -C "$dir" rev-parse --short HEAD 2>/dev/null)
+      fi
+      repo=''${top:t}
+      [[ "''${common:t}" == .git ]] && repo=''${common:h:t}
+      print -r -- "$repo($branch)"
+    }
+  '';
+in
 {
   # herdr: AIエージェント時代のターミナルマルチプレクサ (https://herdr.dev)
   # パッケージは flake.nix の input (github:herdrdev/herdr) の overlay から供給。
@@ -292,6 +327,117 @@
     executable = true;
   };
 
+  # Claude Code の中でのペイン名追従。claude ラッパー(下の initContent)が --settings で読み込ませる。
+  # Bash ツールで cd してもペインのシェル自体は動かないので、zsh の precmd では追従できない。
+  # 代わりにフックで、Claude のセッション cwd から paneLabelFn の名前を付け直す。
+  #   SessionStart      = 起動直後(ラッパーの agent rename が付けた basename ラベルを上書き)
+  #   CwdChanged        = セッション内の移動
+  #   PostToolUse(Bash) = cd を伴わない git switch 等でブランチだけが変わった場合
+  # フック入力の new_cwd を使わない理由: 作業ディレクトリ外への cd でも CwdChanged は new_cwd に
+  # 移動先を載せて発火し、直後に元へ戻されるが、戻った側の CwdChanged は来ない(実測)。
+  # 入力の cwd は戻された後の値なので、常にこちらを使う。
+  #
+  # ~/worktrees(gwq.nix の worktree.basedir)を additionalDirectories に入れる理由: gwq の
+  # ワークツリーはプロジェクト外なので、そのままでは cd が即座に戻されてペイン名も移らない。
+  # 作業ディレクトリとして許可すると移動が持続する(代償: ~/worktrees 配下全体がプロジェクトと
+  # 同じ権限範囲になる)。~/.claude/settings.json に書かないのは、claude-code.nix の方針で
+  # settings.json を nix 管理していないのと、herdr 外で起動した claude には不要なため。
+  xdg.configFile."herdr/claude-settings.json".text = builtins.toJSON {
+    permissions.additionalDirectories = [ "${config.home.homeDirectory}/worktrees" ];
+    hooks =
+      let
+        relabel = [{ type = "command"; command = "$HOME/.config/herdr/scripts/claude-pane-label.zsh"; }];
+      in
+      {
+        SessionStart = [{ hooks = relabel; }];
+        CwdChanged = [{ hooks = relabel; }];
+        PostToolUse = [{ matcher = "Bash"; hooks = relabel; }];
+      };
+  };
+
+  xdg.configFile."herdr/scripts/claude-pane-label.zsh" = {
+    text = ''
+      #!${pkgs.zsh}/bin/zsh -f
+      # stdin: Claude Code のフック入力(JSON)。herdr 外や cwd が取れないときは何もしない。
+      # 失敗しても Claude の動作を止めないよう、常に 0 で抜ける。
+      [[ -n "$HERDR_PANE_ID" ]] || exit 0
+      dir=$(${pkgs.jq}/bin/jq -r '.cwd // empty')
+      [[ -d "$dir" ]] || exit 0
+      ${paneLabelFn}
+      "''${HERDR_BIN_PATH:-herdr}" pane rename "$HERDR_PANE_ID" "$(_herdr_label_for "$dir")" >/dev/null 2>&1
+      exit 0
+    '';
+    executable = true;
+  };
+
+  # space 名(サイドバー見出し)を、フォーカスしたペインの名前(paneLabelFn のラベル)へ追従させる常駐スクリプト。
+  # herdr にはフォーカス変更時にコマンドを走らせる設定が無いため、socket API の events.subscribe を
+  # 購読し続けるプロセスを1つ置く。起動は zsh の precmd(_herdr_ensure_space_follow)が、ロックが
+  # 空いているとき(= 未起動か落ちた後)だけ行う。
+  #   pane.focused / workspace.focused = フォーカスしたペインのラベルで、その space を rename する
+  #   pane.updated = フォーカス中ペインのラベルが変わったとき(cd / Claude 内の移動)も追従する。
+  #                  ターミナルタイトルの変化でも頻繁に届くので、前回付けた名前と同じなら何もしない。
+  # 帰結として、Alt-m で手で付けた space 名は次にフォーカスが動くかペイン名が変わった時点で上書きされる。
+  # 切断されたら(server 再起動 / live-handoff)3秒後に再接続し、socket 自体が消えたら終了する
+  # (herdr が居ないのに回り続けないため。herdr のシェルが次にプロンプトを出せば再起動される)。
+  #
+  # focus-role.sh のように socat を使わない理由: 購読リクエストを送った後も接続を開いたままに
+  # するには socat の stdin に sleep 等を繋ぐ必要があり、サーバ側が切断しても左側のプロセスが残って
+  # 再接続のたびに溜まる。zsocket なら接続を自分で持ち、jq が EOF を受けた時点でパイプラインが終わる。
+  xdg.configFile."herdr/scripts/space-label-follow.zsh" = {
+    text = ''
+      #!${pkgs.zsh}/bin/zsh -f
+      zmodload zsh/system zsh/net/socket || exit 1
+      herdr="''${HERDR_BIN_PATH:-herdr}"
+      jq="${pkgs.jq}/bin/jq"
+      socket="''${HERDR_SOCKET_PATH:-$HOME/.config/herdr/herdr.sock}"
+
+      # 多重起動防止。zsystem flock は fcntl ロックなので、プロセスが落ちれば自動で外れる。
+      # ロックファイルは自動生成されないため先に作る。
+      lock="$socket.space-label.lock"
+      : >> "$lock"
+      zsystem flock -t 0 -f lockfd "$lock" 2>/dev/null || exit 0
+
+      typeset -A applied   # workspace_id -> このスクリプトが最後に付けた space 名
+
+      rename_space() {
+        [[ -n "$1" && -n "$2" ]] || return
+        "$herdr" workspace rename "$1" "$2" >/dev/null 2>&1 && applied[$1]=$2
+      }
+
+      # focus イベントはラベルを持たない(workspace.focused はペイン ID すら無い)ので引き直す。
+      sync_focused() {
+        local ws label
+        "$herdr" pane list 2>/dev/null \
+          | "$jq" -r 'first(.result.panes[] | select(.focused)) | "\(.workspace_id)\t\(.label // "")"' \
+          | IFS=$'\t' read -r ws label
+        rename_space "$ws" "$label"
+      }
+
+      while [[ -S "$socket" ]]; do
+        if zsocket "$socket" 2>/dev/null; then
+          fd=$REPLY
+          print -u$fd -r -- '{"id":"space-label-follow","method":"events.subscribe","params":{"subscriptions":[{"type":"pane.focused"},{"type":"workspace.focused"},{"type":"pane.updated"}]}}'
+          # 切断中に起きたフォーカス変更を取りこぼさないよう、接続のたびに一度合わせる
+          sync_focused
+          "$jq" --unbuffered -r '
+              if .event == "pane_focused" or .event == "workspace_focused" then "focus"
+              elif .event == "pane_updated" and .data.pane.focused
+              then "label\t\(.data.pane.workspace_id)\t\(.data.pane.label // "")"
+              else empty end' <&$fd \
+            | while IFS=$'\t' read -r kind ws label; do
+                if [[ "$kind" == focus ]]; then sync_focused
+                elif [[ "''${applied[$ws]}" != "$label" ]]; then rename_space "$ws" "$label"
+                fi
+              done
+          exec {fd}>&-
+        fi
+        sleep 3
+      done
+    '';
+    executable = true;
+  };
+
   # herdr の agents 一覧(サイドバー)に、Claude Code を起動しているペインだけを
   # 「カレントディレクトリ名」で表示する。
   #
@@ -311,26 +457,48 @@
   # 同じプロジェクトに複数の claude を開くと basename が衝突するため、"base~2","base~3"… と
   # 連番で再試行する(一意制約以外のエラーは即中断)。
   #
-  # ペイン境界ラベル: これとは別に、全ペインの境界タイトルへカレントディレクトリ名を
-  # 常時表示する(_herdr_label_by_cwd)。`pane rename` は手動ラベルだけを設定するコマンドで、
-  # `agent rename` と違い素のシェルをサイドバーへ昇格させないため、cd 毎に全ペインで安全に
-  # 呼べる。手動ラベルは show_agent_labels_on_pane_borders 設定と無関係に境界へ常時表示される
+  # ペイン境界ラベル: これとは別に、全ペインの境界タイトルへ "<リポジトリ名>(<ブランチ名>)"
+  # (リポジトリ外ならディレクトリ名。paneLabelFn)を常時表示する。`pane rename` は手動ラベルだけを
+  # 設定するコマンドで、`agent rename` と違い素のシェルをサイドバーへ昇格させないため、全ペインで
+  # 安全に呼べる。手動ラベルは show_agent_labels_on_pane_borders 設定と無関係に境界へ常時表示される
   # (見えるのは分割時のみ。1ペインだけのタブは境界自体が無い)。socket 経由 ~6ms なので同期実行。
+  # chpwd ではなく precmd で更新するのは、cd を伴わない git switch でもブランチ名を追従させるため。
+  # 名前が変わったときだけ rename するので、毎プロンプトの追加コストは git 1回(~6ms)で済む。
+  # Claude Code の中の移動はシェルの precmd に届かないため、claude ラッパーが --settings で渡す
+  # フック(claude-pane-label.zsh)が付け直す。
   # なお `agent rename` は内部で手動ラベルも同時に設定し、`--clear` はエージェント名しか
-  # 消さない(ラベルは残留する)。claude 終了時に _herdr_label_by_cwd を呼び直すことで、
-  # 連番付き残留ラベル(例: "repo~2")を素の cwd 名へ戻す。
+  # 消さない(ラベルは残留する)。claude 終了時に _herdr_label(前回付けた名前)を捨てて次の
+  # precmd で付け直させ、連番付き残留ラベル(例: "repo~2")や Claude 内で移動した先の名前を戻す。
   programs.zsh.initContent = lib.mkOrder 1500 ''
     if [[ -n "$HERDR_PANE_ID" ]]; then
-      # ペイン境界ラベルをカレントディレクトリ名に追従させる(シェル起動時 + cd 毎)。
-      _herdr_label_by_cwd() {
-        local label="''${PWD:t}"
-        [[ "$PWD" == "$HOME" ]] && label="~"
-        [[ "$PWD" == "/" ]] && label="/"
-        herdr pane rename "$HERDR_PANE_ID" "$label" >/dev/null 2>&1
+      ${paneLabelFn}
+      # シェル起動時に直接呼ばない理由: Claude Code の shell snapshot(tty 無しの interactive zsh)も
+      # .zshrc を通るため、フックが付けた Claude 側の名前を上書きしうる。precmd はプロンプトを
+      # 出す実シェルでしか走らない。
+      _herdr_label=""
+      _herdr_update_label() {
+        local label=$(_herdr_label_for "$PWD")
+        [[ "$label" == "$_herdr_label" ]] && return
+        herdr pane rename "$HERDR_PANE_ID" "$label" >/dev/null 2>&1 && _herdr_label=$label
       }
       autoload -Uz add-zsh-hook
-      add-zsh-hook chpwd _herdr_label_by_cwd
-      _herdr_label_by_cwd
+      add-zsh-hook precmd _herdr_update_label
+
+      # space 名追従の常駐スクリプト(space-label-follow.zsh)を、居なければ起動する。
+      # ロックを試しに取れた = 誰も持っていない = 未起動か落ちた後。取れたらすぐ外して起動する
+      # (同時に複数のシェルが起動しても、スクリプト側のロックで1つ以外は即終了する)。
+      # シェル起動時の1回だけにしない理由: server 再起動で socket が消えて常駐が終了した後も、
+      # どこかのシェルがプロンプトを出した時点で戻るようにするため。確認は fcntl 1回で済む。
+      zmodload zsh/system
+      _herdr_ensure_space_follow() {
+        local lock="''${HERDR_SOCKET_PATH:-$HOME/.config/herdr/herdr.sock}.space-label.lock" fd
+        if [[ -e "$lock" ]]; then
+          zsystem flock -t 0 -f fd "$lock" 2>/dev/null || return
+          zsystem flock -u $fd
+        fi
+        ~/.config/herdr/scripts/space-label-follow.zsh </dev/null >/dev/null 2>&1 &!
+      }
+      add-zsh-hook precmd _herdr_ensure_space_follow
 
       _herdr_name_by_cwd() {
         local base="''${PWD:t}" try out n=1
@@ -345,14 +513,17 @@
       }
       # claude 起動ラッパー。起動時に cwd 名を付け、終了時に名前を外す(= 一覧から落とす)。
       # command で実体を呼ぶので再帰しない。alias c=claude も alias 展開後この関数に届く。
-      # --clear は境界ラベルまでは消さないため、_herdr_label_by_cwd で cwd 名へ戻す
-      # (agent rename が付けた連番付きラベル "repo~2" などの残留を防ぐ)。
+      # --settings はペイン名追従のフックと ~/worktrees の許可(claude-settings.json)を足すもので、
+      # ユーザー/プロジェクトの設定とは併合される。
+      # 終了後に _herdr_label を捨て、次の precmd でシェル自身の cwd の名前へ付け直させる
+      # (--clear は境界ラベルまでは消さないため、agent rename の連番付きラベル "repo~2" や
+      # Claude 内で移動した先の名前が残るのを防ぐ)。
       claude() {
         _herdr_name_by_cwd
-        command claude "$@"
+        command claude --settings ~/.config/herdr/claude-settings.json "$@"
         local ret=$?
         herdr agent rename "$HERDR_PANE_ID" --clear >/dev/null 2>&1
-        _herdr_label_by_cwd
+        _herdr_label=""
         return $ret
       }
     elif [[ -n "$HERDR_ENV" ]]; then

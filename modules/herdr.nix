@@ -38,15 +38,18 @@ let
       reply=("$repo" "$branch")
     }
 
-    # ペイン $1 に名前 $2 を付け、ブランチ $3 を branch トークンとして報告する(空ならトークンを消す)。
+    # ペイン $1 に名前 $2 を付け、名前・ブランチ $3・それを引いたディレクトリ $4 を
+    # name / branch / dir トークンとして報告する(ブランチが空なら branch を消す)。
+    # dir は space-label-follow.zsh が「報告がペインの今の cwd に対するものか」を突き合わせるためのもの。
+    # 末尾80文字だけ持つ理由: トークン値は herdr 側で先頭80文字に黙って切り詰められ、
+    # ワークツリーのパスは容易に超える。末尾なら切られず、比較する側も末尾80文字で揃えられる。
     _herdr_report_pane() {
-      local herdr="''${HERDR_BIN_PATH:-herdr}"
+      local herdr="''${HERDR_BIN_PATH:-herdr}" dir=$4
+      local -a branch=(--clear-token branch)
+      [[ -n "$3" ]] && branch=(--token "branch=$3")
       "$herdr" pane rename "$1" "$2" >/dev/null 2>&1 || return
-      if [[ -n "$3" ]]; then
-        "$herdr" pane report-metadata "$1" --source herdr-labels --token "branch=$3" >/dev/null 2>&1
-      else
-        "$herdr" pane report-metadata "$1" --source herdr-labels --clear-token branch >/dev/null 2>&1
-      fi
+      "$herdr" pane report-metadata "$1" --source herdr-labels \
+        --token "name=$2" "''${branch[@]}" --token "dir=''${dir[-80,-1]}" >/dev/null 2>&1
     }
   '';
 in
@@ -388,7 +391,7 @@ in
       [[ -d "$dir" ]] || exit 0
       ${paneLabelFns}
       _herdr_label_for "$dir"
-      _herdr_report_pane "$HERDR_PANE_ID" "''${reply[1]}" "''${reply[2]}"
+      _herdr_report_pane "$HERDR_PANE_ID" "''${reply[1]}" "''${reply[2]}" "$dir"
       exit 0
     '';
     executable = true;
@@ -396,7 +399,14 @@ in
 
   # space の表示を、フォーカスしたペインに合わせる常駐スクリプト。
   #   1行目(space 名) = ペインの名前(リポジトリ名 / リポジトリ外ならディレクトリ名)
-  #   2行目($branch)  = ペインの branch トークン(config.toml の [ui.sidebar.spaces] rows)
+  #   2行目($branch)  = そのブランチ(config.toml の [ui.sidebar.spaces] rows)
+  # 値はペインが報告した name / branch トークン(precmd / Claude フック)を使うが、報告が
+  # 「ペインの今の cwd に対するもの」と確かめられないときは捨て、ここで cwd から引き直す。
+  # 報告を鵜呑みにしない理由: 報告しないシェル(この仕組みより前の .zshrc を読んだまま)や
+  # 手動の pane rename があると、名前とブランチが別の時点・別のディレクトリの値になる。
+  # 実際に ~/worktrees/.../nix-config/foobar で "foobar" と古い "main" が組み合わさって出た。
+  # 確かめ方: name があり、dir トークンが cwd の末尾80文字と一致すれば信じる。Claude の
+  # ペイン(agent あり)は中で移動してもペインの cwd が変わらないので、dir を比べずに信じる。
   # herdr 組み込みの branch トークンを使わない理由: 組み込みのブランチ(と自動 space 名)は、space の
   # 「最初のタブの root ペイン」の cwd から引かれる(Workspace::resolved_identity_cwd_from)。
   # root 以外のペインで移動しても変わらず、root ペインがリポジトリ外に居ればブランチは出ない。
@@ -433,8 +443,17 @@ in
       : >> "$lock"
       zsystem flock -t 0 -f lockfd "$lock" 2>/dev/null || exit 0
 
+      # 報告を信用できないペインの名前とブランチを、ここで cwd から引くための _herdr_label_for
+      ${paneLabelFns}
+
       # workspace_id -> このスクリプトが最後に写した名前 / ブランチ
       typeset -A applied_label applied_branch
+      # pane_id -> 自前で引いたときの cwd と結果(頻繁に届く pane.updated のたびに git を叩かないため)
+      typeset -A computed_cwd computed_name computed_branch
+
+      # jq で1ペインを US 区切りの1行にする(区切りは --arg us で渡す)。並びは read の変数順と揃える。
+      pane_fields='def fields: [.workspace_id, .pane_id, (.cwd // ""), (.agent // ""),
+        (.tokens.name // ""), (.tokens.branch // ""), (.tokens.dir // "")] | join($us);'
 
       # space $1 へ名前 $2 とブランチ $3 を写す。前回写した値と同じ部分は送らない。
       apply_space() {
@@ -451,17 +470,34 @@ in
         fi
       }
 
-      # focus イベントは名前もブランチも持たない(workspace.focused はペイン ID すら無い)ので引き直す。
+      # ペイン $1(cwd $2 / agent $3 / 報告された name $4・branch $5・dir $6)の表示値を
+      # reply=(<名前> <ブランチ>) に入れる。$7 が空でなければ覚えを使わず引き直す
+      # (フォーカス時。報告しないシェルで cd を伴わず git switch した場合を拾う)。
+      resolve_pane() {
+        if [[ -n "$4" && ( -n "$3" || "$6" == "''${2[-80,-1]}" ) ]]; then
+          reply=("$4" "$5")
+          return
+        fi
+        [[ -d "$2" ]] || return 1
+        if [[ -z "$7" && "''${computed_cwd[$1]}" == "$2" ]]; then
+          reply=("''${computed_name[$1]}" "''${computed_branch[$1]}")
+          return
+        fi
+        _herdr_label_for "$2"
+        computed_cwd[$1]=$2 computed_name[$1]=''${reply[1]} computed_branch[$1]=''${reply[2]}
+      }
+
+      # focus イベントは表示値を持たない(workspace.focused はペイン ID すら無い)ので引き直す。
       # 前回値を捨ててから写すのは、Alt-m などで手で変えた space 名もフォーカス時に戻すため。
       sync_focused() {
-        local ws label branch
+        local ws pane cwd agent name branch dir
         "$herdr" pane list 2>/dev/null \
-          | "$jq" -r 'first(.result.panes[] | select(.focused))
-              | [.workspace_id, (.label // ""), (.tokens.branch // "")] | join("\u001f")' \
-          | IFS=$us read -r ws label branch
+          | "$jq" -r --arg us "$us" "$pane_fields"' first(.result.panes[] | select(.focused)) | fields' \
+          | IFS=$us read -r ws pane cwd agent name branch dir
         [[ -n "$ws" ]] || return
+        resolve_pane "$pane" "$cwd" "$agent" "$name" "$branch" "$dir" force || return
         unset "applied_label[$ws]" "applied_branch[$ws]"
-        apply_space "$ws" "$label" "$branch"
+        apply_space "$ws" "''${reply[1]}" "''${reply[2]}"
       }
 
       while [[ -S "$socket" ]]; do
@@ -470,14 +506,14 @@ in
           print -u$fd -r -- '{"id":"space-label-follow","method":"events.subscribe","params":{"subscriptions":[{"type":"pane.focused"},{"type":"workspace.focused"},{"type":"pane.updated"}]}}'
           # 切断中に起きた変更を取りこぼさないよう、接続のたびに一度合わせる
           sync_focused
-          "$jq" --unbuffered -r '
+          "$jq" --unbuffered -r --arg us "$us" "$pane_fields"'
               if .event == "pane_focused" or .event == "workspace_focused" then "focus"
-              elif .event == "pane_updated" and .data.pane.focused
-              then .data.pane | ["update", .workspace_id, (.label // ""), (.tokens.branch // "")] | join("\u001f")
+              elif .event == "pane_updated" and .data.pane.focused then "update" + $us + (.data.pane | fields)
               else empty end' <&$fd \
-            | while IFS=$us read -r kind ws label branch; do
+            | while IFS=$us read -r kind ws pane cwd agent name branch dir; do
                 if [[ "$kind" == focus ]]; then sync_focused
-                else apply_space "$ws" "$label" "$branch"
+                elif resolve_pane "$pane" "$cwd" "$agent" "$name" "$branch" "$dir"; then
+                  apply_space "$ws" "''${reply[1]}" "''${reply[2]}"
                 fi
               done
           exec {fd}>&-
@@ -515,7 +551,8 @@ in
   # (見えるのは分割時のみ。1ペインだけのタブは境界自体が無い)。socket 経由 ~6ms なので同期実行。
   # chpwd ではなく precmd で更新するのは、cd を伴わない git switch でもブランチを追従させるため
   # (AUTO_CD で cd を省略した移動も、プロンプトは必ず出るので同じ経路で拾える)。
-  # 名前かブランチが変わったときだけ報告するので、毎プロンプトの追加コストは git 1回(~6ms)で済む。
+  # ディレクトリ・名前・ブランチのどれかが変わったときだけ報告するので、毎プロンプトの追加コストは
+  # git 1回(~6ms)で済む。
   # Claude Code の中の移動はシェルの precmd に届かないため、claude ラッパーが --settings で渡す
   # フック(claude-pane-label.zsh)が付け直す。
   # なお `agent rename` は内部で手動ラベルも同時に設定し、`--clear` はエージェント名しか
@@ -530,9 +567,10 @@ in
       _herdr_label=""
       _herdr_update_label() {
         _herdr_label_for "$PWD"
-        local current="''${(pj:\n:)reply}"
+        # 同じリポジトリ内の移動でも dir トークンを今の cwd に合わせ直すため、$PWD も比較に含める
+        local current="$PWD"$'\n'"''${(pj:\n:)reply}"
         [[ "$current" == "$_herdr_label" ]] && return
-        _herdr_report_pane "$HERDR_PANE_ID" "''${reply[1]}" "''${reply[2]}" && _herdr_label=$current
+        _herdr_report_pane "$HERDR_PANE_ID" "''${reply[1]}" "''${reply[2]}" "$PWD" && _herdr_label=$current
       }
       autoload -Uz add-zsh-hook
       add-zsh-hook precmd _herdr_update_label

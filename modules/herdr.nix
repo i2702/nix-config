@@ -1,24 +1,29 @@
 { config, pkgs, lib, ... }:
 let
-  # ペイン名を "<リポジトリ名>(<ブランチ名>)"、リポジトリ外ならディレクトリ名にする zsh 関数。
+  # ペインの名前(リポジトリ名、リポジトリ外ならディレクトリ名)とブランチを出す zsh 関数群。
   # 素のシェル(initContent の precmd)と Claude Code のフック(claude-pane-label.zsh)で
-  # 同じ名前を出すため、両方へこの定義をそのまま埋め込む。
+  # 同じ値を出すため、両方へこの定義をそのまま埋め込む。
+  #
+  # ブランチを名前に混ぜず pane の branch トークンに分けて持つのは、サイドバーの space 2行目
+  # ($branch)へ単独で出すため。herdr 組み込みの branch トークンを使わない理由は
+  # space-label-follow.zsh のコメント参照。
   #
   # リポジトリ名を --show-toplevel の basename にしない理由: gwq のワークツリーは
   # "sub-feature-xxx" のようなブランチ由来のディレクトリ名になり、どのリポジトリか分からない。
   # 共通 git ディレクトリ(本体の .git)の親から取ればワークツリーでも本体の名前になる。
   # 共通ディレクトリが .git で終わらない(サブモジュール/ベアリポジトリ)ときだけ toplevel に戻す。
   # rev-parse を1回にまとめているのは、precmd で毎プロンプト走るため(実測 ~6ms)。
-  paneLabelFn = ''
+  paneLabelFns = ''
+    # $1 のディレクトリについて reply=(<名前> <ブランチ>) を返す。リポジトリ外ならブランチは空。
     _herdr_label_for() {
       local dir=$1 out common top branch repo
       out=$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir --show-toplevel --abbrev-ref HEAD 2>/dev/null)
       local -a info=("''${(@f)out}")
       common=''${info[1]} top=''${info[2]} branch=''${info[3]}
       if [[ -z "$common" || -z "$top" ]]; then
-        if [[ "$dir" == "$HOME" ]]; then print -r -- "~"
-        elif [[ "$dir" == / ]]; then print -r -- /
-        else print -r -- "''${dir:t}"
+        if [[ "$dir" == "$HOME" ]]; then reply=("~" "")
+        elif [[ "$dir" == / ]]; then reply=(/ "")
+        else reply=("''${dir:t}" "")
         fi
         return
       fi
@@ -30,7 +35,18 @@ let
       fi
       repo=''${top:t}
       [[ "''${common:t}" == .git ]] && repo=''${common:h:t}
-      print -r -- "$repo($branch)"
+      reply=("$repo" "$branch")
+    }
+
+    # ペイン $1 に名前 $2 を付け、ブランチ $3 を branch トークンとして報告する(空ならトークンを消す)。
+    _herdr_report_pane() {
+      local herdr="''${HERDR_BIN_PATH:-herdr}"
+      "$herdr" pane rename "$1" "$2" >/dev/null 2>&1 || return
+      if [[ -n "$3" ]]; then
+        "$herdr" pane report-metadata "$1" --source herdr-labels --token "branch=$3" >/dev/null 2>&1
+      else
+        "$herdr" pane report-metadata "$1" --source herdr-labels --clear-token branch >/dev/null 2>&1
+      fi
     }
   '';
 in
@@ -220,6 +236,13 @@ in
     # タブは常に1つなので、タブ UI が完全に見えなくなる
     hide_tab_bar_when_single_tab = true
 
+    [ui.sidebar.spaces]
+    # space カードの2行: 1行目 = space 名(フォーカス中ペインのリポジトリ名) / 2行目 = そのブランチ。
+    # 2行目を組み込みの branch ではなく $branch(space-label-follow.zsh が workspace トークンとして
+    # 写す値)にする理由は同スクリプトのコメント参照(組み込みは最初のタブの root ペインしか見ない)。
+    # 組み込みの git_status(↑↓)も同じく root ペイン基準でフォーカス中のリポジトリと食い違うため外した。
+    rows = [["state_icon", "workspace"], ["$branch"]]
+
     [experimental]
     # ペイン内での Kitty graphics(画像描画)を有効化する。herdr 側はまだ experimental 扱いで、
     # 全ペインの Kitty graphics 処理に効く。端末側は Ghostty なのでプロトコルは対応済み。
@@ -327,9 +350,9 @@ in
     executable = true;
   };
 
-  # Claude Code の中でのペイン名追従。claude ラッパー(下の initContent)が --settings で読み込ませる。
+  # Claude Code の中でのペイン名・ブランチ追従。claude ラッパー(下の initContent)が --settings で読み込ませる。
   # Bash ツールで cd してもペインのシェル自体は動かないので、zsh の precmd では追従できない。
-  # 代わりにフックで、Claude のセッション cwd から paneLabelFn の名前を付け直す。
+  # 代わりにフックで、Claude のセッション cwd から paneLabelFns の名前とブランチを報告し直す。
   #   SessionStart      = 起動直後(ラッパーの agent rename が付けた basename ラベルを上書き)
   #   CwdChanged        = セッション内の移動
   #   PostToolUse(Bash) = cd を伴わない git switch 等でブランチだけが変わった場合
@@ -363,20 +386,29 @@ in
       [[ -n "$HERDR_PANE_ID" ]] || exit 0
       dir=$(${pkgs.jq}/bin/jq -r '.cwd // empty')
       [[ -d "$dir" ]] || exit 0
-      ${paneLabelFn}
-      "''${HERDR_BIN_PATH:-herdr}" pane rename "$HERDR_PANE_ID" "$(_herdr_label_for "$dir")" >/dev/null 2>&1
+      ${paneLabelFns}
+      _herdr_label_for "$dir"
+      _herdr_report_pane "$HERDR_PANE_ID" "''${reply[1]}" "''${reply[2]}"
       exit 0
     '';
     executable = true;
   };
 
-  # space 名(サイドバー見出し)を、フォーカスしたペインの名前(paneLabelFn のラベル)へ追従させる常駐スクリプト。
+  # space の表示を、フォーカスしたペインに合わせる常駐スクリプト。
+  #   1行目(space 名) = ペインの名前(リポジトリ名 / リポジトリ外ならディレクトリ名)
+  #   2行目($branch)  = ペインの branch トークン(config.toml の [ui.sidebar.spaces] rows)
+  # herdr 組み込みの branch トークンを使わない理由: 組み込みのブランチ(と自動 space 名)は、space の
+  # 「最初のタブの root ペイン」の cwd から引かれる(Workspace::resolved_identity_cwd_from)。
+  # root 以外のペインで移動しても変わらず、root ペインがリポジトリ外に居ればブランチは出ない。
+  # フォーカス中のペインを基準にするには、ブランチを自前で workspace のトークンへ流すしかない。
+  # なお $branch はカスタムトークンだが、space カードでは組み込み branch と同じスタイルで描かれる。
+  #
   # herdr にはフォーカス変更時にコマンドを走らせる設定が無いため、socket API の events.subscribe を
   # 購読し続けるプロセスを1つ置く。起動は zsh の precmd(_herdr_ensure_space_follow)が、ロックが
   # 空いているとき(= 未起動か落ちた後)だけ行う。
-  #   pane.focused / workspace.focused = フォーカスしたペインのラベルで、その space を rename する
-  #   pane.updated = フォーカス中ペインのラベルが変わったとき(cd / Claude 内の移動)も追従する。
-  #                  ターミナルタイトルの変化でも頻繁に届くので、前回付けた名前と同じなら何もしない。
+  #   pane.focused / workspace.focused = フォーカスしたペインの名前とブランチを、その space へ写す
+  #   pane.updated = フォーカス中ペインの名前かブランチが変わったとき(cd / git switch / Claude 内の移動)も写す。
+  #                  ターミナルタイトルの変化でも頻繁に届くので、前回写した値と同じ部分は送らない。
   # 帰結として、Alt-m で手で付けた space 名は次にフォーカスが動くかペイン名が変わった時点で上書きされる。
   # 切断されたら(server 再起動 / live-handoff)3秒後に再接続し、socket 自体が消えたら終了する
   # (herdr が居ないのに回り続けないため。herdr のシェルが次にプロンプトを出せば再起動される)。
@@ -391,6 +423,9 @@ in
       herdr="''${HERDR_BIN_PATH:-herdr}"
       jq="${pkgs.jq}/bin/jq"
       socket="''${HERDR_SOCKET_PATH:-$HOME/.config/herdr/herdr.sock}"
+      # 列の区切り。タブは IFS 上の空白扱いで連続すると空欄が潰れ、ブランチの無いペインで
+      # 列がずれるため、空白扱いされない US(0x1f)を使う。
+      us=$'\x1f'
 
       # 多重起動防止。zsystem flock は fcntl ロックなので、プロセスが落ちれば自動で外れる。
       # ロックファイルは自動生成されないため先に作る。
@@ -398,36 +433,51 @@ in
       : >> "$lock"
       zsystem flock -t 0 -f lockfd "$lock" 2>/dev/null || exit 0
 
-      typeset -A applied   # workspace_id -> このスクリプトが最後に付けた space 名
+      # workspace_id -> このスクリプトが最後に写した名前 / ブランチ
+      typeset -A applied_label applied_branch
 
-      rename_space() {
+      # space $1 へ名前 $2 とブランチ $3 を写す。前回写した値と同じ部分は送らない。
+      apply_space() {
         [[ -n "$1" && -n "$2" ]] || return
-        "$herdr" workspace rename "$1" "$2" >/dev/null 2>&1 && applied[$1]=$2
+        if [[ "''${applied_label[$1]}" != "$2" ]]; then
+          "$herdr" workspace rename "$1" "$2" >/dev/null 2>&1 && applied_label[$1]=$2
+        fi
+        if (( ! ''${+applied_branch[$1]} )) || [[ "''${applied_branch[$1]}" != "$3" ]]; then
+          if [[ -n "$3" ]]; then
+            "$herdr" workspace report-metadata "$1" --source herdr-labels --token "branch=$3" >/dev/null 2>&1
+          else
+            "$herdr" workspace report-metadata "$1" --source herdr-labels --clear-token branch >/dev/null 2>&1
+          fi && applied_branch[$1]=$3
+        fi
       }
 
-      # focus イベントはラベルを持たない(workspace.focused はペイン ID すら無い)ので引き直す。
+      # focus イベントは名前もブランチも持たない(workspace.focused はペイン ID すら無い)ので引き直す。
+      # 前回値を捨ててから写すのは、Alt-m などで手で変えた space 名もフォーカス時に戻すため。
       sync_focused() {
-        local ws label
+        local ws label branch
         "$herdr" pane list 2>/dev/null \
-          | "$jq" -r 'first(.result.panes[] | select(.focused)) | "\(.workspace_id)\t\(.label // "")"' \
-          | IFS=$'\t' read -r ws label
-        rename_space "$ws" "$label"
+          | "$jq" -r 'first(.result.panes[] | select(.focused))
+              | [.workspace_id, (.label // ""), (.tokens.branch // "")] | join("\u001f")' \
+          | IFS=$us read -r ws label branch
+        [[ -n "$ws" ]] || return
+        unset "applied_label[$ws]" "applied_branch[$ws]"
+        apply_space "$ws" "$label" "$branch"
       }
 
       while [[ -S "$socket" ]]; do
         if zsocket "$socket" 2>/dev/null; then
           fd=$REPLY
           print -u$fd -r -- '{"id":"space-label-follow","method":"events.subscribe","params":{"subscriptions":[{"type":"pane.focused"},{"type":"workspace.focused"},{"type":"pane.updated"}]}}'
-          # 切断中に起きたフォーカス変更を取りこぼさないよう、接続のたびに一度合わせる
+          # 切断中に起きた変更を取りこぼさないよう、接続のたびに一度合わせる
           sync_focused
           "$jq" --unbuffered -r '
               if .event == "pane_focused" or .event == "workspace_focused" then "focus"
               elif .event == "pane_updated" and .data.pane.focused
-              then "label\t\(.data.pane.workspace_id)\t\(.data.pane.label // "")"
+              then .data.pane | ["update", .workspace_id, (.label // ""), (.tokens.branch // "")] | join("\u001f")
               else empty end' <&$fd \
-            | while IFS=$'\t' read -r kind ws label; do
+            | while IFS=$us read -r kind ws label branch; do
                 if [[ "$kind" == focus ]]; then sync_focused
-                elif [[ "''${applied[$ws]}" != "$label" ]]; then rename_space "$ws" "$label"
+                else apply_space "$ws" "$label" "$branch"
                 fi
               done
           exec {fd}>&-
@@ -457,29 +507,32 @@ in
   # 同じプロジェクトに複数の claude を開くと basename が衝突するため、"base~2","base~3"… と
   # 連番で再試行する(一意制約以外のエラーは即中断)。
   #
-  # ペイン境界ラベル: これとは別に、全ペインの境界タイトルへ "<リポジトリ名>(<ブランチ名>)"
-  # (リポジトリ外ならディレクトリ名。paneLabelFn)を常時表示する。`pane rename` は手動ラベルだけを
+  # ペイン境界ラベル: これとは別に、全ペインの境界タイトルへリポジトリ名(リポジトリ外なら
+  # ディレクトリ名。paneLabelFns)を常時表示し、ブランチは pane の branch トークンとして報告する
+  # (space の2行目へは space-label-follow.zsh が写す)。`pane rename` は手動ラベルだけを
   # 設定するコマンドで、`agent rename` と違い素のシェルをサイドバーへ昇格させないため、全ペインで
   # 安全に呼べる。手動ラベルは show_agent_labels_on_pane_borders 設定と無関係に境界へ常時表示される
   # (見えるのは分割時のみ。1ペインだけのタブは境界自体が無い)。socket 経由 ~6ms なので同期実行。
-  # chpwd ではなく precmd で更新するのは、cd を伴わない git switch でもブランチ名を追従させるため。
-  # 名前が変わったときだけ rename するので、毎プロンプトの追加コストは git 1回(~6ms)で済む。
+  # chpwd ではなく precmd で更新するのは、cd を伴わない git switch でもブランチを追従させるため
+  # (AUTO_CD で cd を省略した移動も、プロンプトは必ず出るので同じ経路で拾える)。
+  # 名前かブランチが変わったときだけ報告するので、毎プロンプトの追加コストは git 1回(~6ms)で済む。
   # Claude Code の中の移動はシェルの precmd に届かないため、claude ラッパーが --settings で渡す
   # フック(claude-pane-label.zsh)が付け直す。
   # なお `agent rename` は内部で手動ラベルも同時に設定し、`--clear` はエージェント名しか
-  # 消さない(ラベルは残留する)。claude 終了時に _herdr_label(前回付けた名前)を捨てて次の
-  # precmd で付け直させ、連番付き残留ラベル(例: "repo~2")や Claude 内で移動した先の名前を戻す。
+  # 消さない(ラベルは残留する)。claude 終了時に _herdr_label(前回報告した名前とブランチ)を捨てて
+  # 次の precmd で付け直させ、連番付き残留ラベル(例: "repo~2")や Claude 内で移動した先の値を戻す。
   programs.zsh.initContent = lib.mkOrder 1500 ''
     if [[ -n "$HERDR_PANE_ID" ]]; then
-      ${paneLabelFn}
+      ${paneLabelFns}
       # シェル起動時に直接呼ばない理由: Claude Code の shell snapshot(tty 無しの interactive zsh)も
-      # .zshrc を通るため、フックが付けた Claude 側の名前を上書きしうる。precmd はプロンプトを
+      # .zshrc を通るため、フックが付けた Claude 側の値を上書きしうる。precmd はプロンプトを
       # 出す実シェルでしか走らない。
       _herdr_label=""
       _herdr_update_label() {
-        local label=$(_herdr_label_for "$PWD")
-        [[ "$label" == "$_herdr_label" ]] && return
-        herdr pane rename "$HERDR_PANE_ID" "$label" >/dev/null 2>&1 && _herdr_label=$label
+        _herdr_label_for "$PWD"
+        local current="''${(pj:\n:)reply}"
+        [[ "$current" == "$_herdr_label" ]] && return
+        _herdr_report_pane "$HERDR_PANE_ID" "''${reply[1]}" "''${reply[2]}" && _herdr_label=$current
       }
       autoload -Uz add-zsh-hook
       add-zsh-hook precmd _herdr_update_label

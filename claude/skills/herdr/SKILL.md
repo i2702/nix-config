@@ -42,8 +42,8 @@ socket プロトコルのバージョンが上がると、起動中の旧サー�
 herdr pane list   # → {"error":{"code":"protocol_mismatch",...}} なら不一致
 ```
 
-この状態ではキーバインドのシェルスクリプト(Alt-f / Alt-a / Alt-e)、ペイン名
-(`repo(branch)`)の更新、space 名のフォーカス追従(space-label-follow.zsh)が全部止まる。解消はライブペインを保持したまま新バイナリのサーバへ
+この状態ではキーバインドのシェルスクリプト(Alt-f / Alt-a / Alt-e)、ペイン名とブランチの
+報告、space 名と2行目ブランチのフォーカス追従(space-label-follow.zsh)が全部止まる。解消はライブペインを保持したまま新バイナリのサーバへ
 引き継ぐこのコマンド:
 
 ```bash

@@ -25,6 +25,7 @@ usage() {
 
   --base <ref>      取り込み先(既定: origin/main があればそれ、無ければ main)
   --pattern <glob>  対象ブランチの glob。繰り返し指定可(既定: 'merge/*' 'sub/*')
+                    wip/* は glob では拾わず、--pattern wip/foo のように名指ししたときだけ対象
   --apply           実際に削除する(既定は dry-run で一覧を出すだけ)
   --remote          リモート(origin)側の同名ブランチも削除する
   --keep-worktree   ワークツリーを消さない(ワークツリーを持つブランチは対象外になる)
@@ -98,6 +99,15 @@ matches_pattern() {
   return 1
 }
 
+# パターンにブランチ名がそのまま渡されているか。glob として一致しただけでは名指しとみなさない
+named_explicitly() {
+  local name="$1" p
+  for p in "${PATTERNS[@]}"; do
+    [ "$p" = "$name" ] && return 0
+  done
+  return 1
+}
+
 BRANCHES=""
 while IFS= read -r ref; do
   matches_pattern "$ref" && BRANCHES="${BRANCHES}${ref}"$'\n'
@@ -115,6 +125,9 @@ while IFS= read -r b; do
 
   skip=""
   for p in "${PROTECTED_DEFAULT[@]}"; do [ "$b" = "$p" ] && skip="保護対象"; done
+  # wip/ を glob の一致で拾わないのは、作業途中の置き場だから。コミットを積む前の wip は
+  # 先端が base と同じ位置にあり、ancestor で取り込み済みと判定されてしまう
+  case "$b" in wip/*) named_explicitly "$b" || skip="wip/ は名指し時のみ対象(--pattern $b)" ;; esac
   [ "$b" = "${BASE#origin/}" ] && skip="base 自身"
   [ "$b" = "$CURRENT" ] && skip="現在のワークツリーがチェックアウト中"
   if [ -n "$wt" ] && [ "$KEEP_WORKTREE" -eq 1 ]; then skip="ワークツリー有り(--keep-worktree)"; fi

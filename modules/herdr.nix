@@ -136,7 +136,10 @@ in
     # Mac/WSL とも Alt 系に統一する(以前 Mac 用に併記していた cmd+t / cmd+] / cmd+[ は廃止)。
     # 補足: ctrl+tab / ctrl+alt+n 系はこの端末環境では herdr まで届かず不達だった
     # (Tab 系は kitty keyboard protocol の「全キー報告」フラグが必要)。素の Alt 系が確実。
-    new_workspace = "alt+n"
+    # Alt-n の space 作成は下の [[keys.command]] の new-space.sh が担う(アクティブ space の直下に
+    # 作るため)。ネイティブ側を空にするのは、組み込みアクションと同じキーのカスタムコマンドは
+    # herdr に無効化されるため。
+    new_workspace = ""
     next_workspace = ["alt+p", "alt+right"]
     previous_workspace = ["alt+o", "alt+left"]
 
@@ -150,6 +153,13 @@ in
     # prefix 系デフォルトごと消えてタブを作る手段が無くなる(各 space は常に1タブのまま)。
     # 他のタブ操作キー(next_tab 等)はタブが増えない限り無害なのでデフォルトのまま放置。
     new_tab = ""
+
+    # Alt-n で新しい space を、アクティブ space の直下に作る(ネイティブの new_workspace は末尾に足す)
+    [[keys.command]]
+    key = "alt+n"
+    type = "shell"
+    command = "~/.config/herdr/scripts/new-space.sh"
+    description = "アクティブ space の直下に新しい space を作る"
 
     # 分割。type = "shell" はバックグラウンド実行で、split-pane.sh が herdr CLI 経由で分割する。
     #   Alt-s = 自動タイル分割: フォーカス中のペインを起点に 2x2 グリッドへ割る(4分割済みなら何もしない)
@@ -257,6 +267,42 @@ in
     # 全ペインの Kitty graphics 処理に効く。端末側は Ghostty なのでプロトコルは対応済み。
     kitty_graphics = true
   '';
+
+  # 新しい space をアクティブ space の直下に作るスクリプト(Alt-n から呼ばれる)。
+  # herdr は space を常に一覧の末尾へ足し、作成位置を指定する設定も CLI オプションも無いので、
+  # 作ってから socket API の workspace.move で「アクティブ space の位置 + 1」へ移す
+  # (insert_index は「その位置の前へ挿入」)。移動後もフォーカスは新しい space に残る。
+  # workspace.move を socat で直接叩くのは、CLI の `herdr workspace` に move サブコマンドが無いため。
+  # --cwd を渡さない理由: workspace.create は cwd 省略時にネイティブの new_workspace と同じ解決
+  # (アクティブ space のフォーカス中ペインの cwd → new_cwd = "follow")をするので、ここで真似る必要が無い。
+  # herdr 自身の worktree 機能で作った space はサイドバーで親の下にまとめて描かれ、一覧の並びと
+  # 見た目の並びがずれるが、ワークツリーは gwq で作っているので考慮しない。
+  xdg.configFile."herdr/scripts/new-space.sh" = {
+    text = ''
+      #!/bin/bash
+      set -eu
+      herdr="''${HERDR_BIN_PATH:-herdr}"
+      jq="${pkgs.jq}/bin/jq"
+      socat="${pkgs.socat}/bin/socat"
+      active="''${HERDR_ACTIVE_WORKSPACE_ID:-}"
+
+      new=$("$herdr" workspace create --focus | "$jq" -r '.result.workspace.workspace_id // empty')
+      [ -n "$new" ] || exit 1
+      # space が1つも無い状態からの作成なら並べ替える相手が居ない
+      [ -n "$active" ] || exit 0
+
+      index=$(
+        "$herdr" workspace list \
+          | "$jq" -r --arg a "$active" '.result.workspaces | map(.workspace_id) | index($a) // empty'
+      )
+      [ -n "$index" ] || exit 0
+      socket="''${HERDR_SOCKET_PATH:-$HOME/.config/herdr/herdr.sock}"
+      printf '{"id":"new-space","method":"workspace.move","params":{"workspace_id":"%s","insert_index":%d}}\n' \
+        "$new" "$((index + 1))" \
+        | "$socat" - UNIX-CONNECT:"$socket" >/dev/null
+    '';
+    executable = true;
+  };
 
   # ペイン分割スクリプト(Alt-s から auto で呼ばれる)。引数: auto | right | down。
   #   auto         = 自動タイル分割。フォーカス中のペインを起点に 2x2 グリッドを作る。

@@ -270,6 +270,12 @@ Get-CimInstance Win32_Process -Filter "Name='wsl.exe'" |
   Select-Object ProcessId, SessionId, CommandLine
 ```
 
+`Get-ScheduledTaskInfo` の `LastTaskResult` が `2147946720`
+(`0x800710E0` = ERROR_TASK_ALREADY_RUNNING)になっているのは正常。5分ごとの発火が
+`MultipleInstancesPolicy=IgnoreNew` で捨てられた記録で、失敗ではない。むしろ常駐が
+生きている証拠なので、エラーコードに見えてもここを追いかけない。常駐が死んでいれば
+発火は捨てられず、新しいインスタンスが実際に立つ。
+
 ### 効かない場面
 
 - **ログオフ中**。`InteractiveToken` はログオンが前提なので、ログオフすると常駐も

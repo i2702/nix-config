@@ -152,13 +152,13 @@ in
     new_tab = ""
 
     # 分割。type = "shell" はバックグラウンド実行で、split-pane.sh が herdr CLI 経由で分割する。
-    #   Alt-f = 自動タイル分割: 一番大きいペインを長辺方向に割り、ペイン4つで必ず 2x2 になる
+    #   Alt-f = 自動タイル分割: フォーカス中のペインを起点に 2x2 グリッドへ割る(4分割済みなら何もしない)
     #   Alt-v / Alt-s = フォーカス中のペインを右 / 下に割る
     [[keys.command]]
     key = "alt+f"
     type = "shell"
     command = "~/.config/herdr/scripts/split-pane.sh auto"
-    description = "自動タイル分割(グリッドに追加)"
+    description = "自動タイル分割(2x2 グリッドに追加)"
 
     [[keys.command]]
     key = "alt+v"
@@ -272,9 +272,15 @@ in
   '';
 
   # ペイン分割スクリプト(Alt-f / Alt-v / Alt-s から呼ばれる)。引数: auto | right | down。
-  #   auto         = 自動タイル分割。フォーカス中タブの「一番大きいペイン」を長辺方向に分割する。
-  #                  端末セルは縦:横 ≒ 2:1 なので幅 > 2*高さ なら右(縦線)、そうでなければ下(横線)。
-  #                  これを繰り返すとタブは常に均等グリッドに保たれ、ペイン4つで自動的に 2x2 になる。
+  #   auto         = 自動タイル分割。フォーカス中のペインを起点に 2x2 グリッドを作る。
+  #                  タブの全幅を占めている(まだ縦に割られていない)なら縦線で2分割、全幅は無いが全高を
+  #                  占めているなら横線で2分割。herdr の split は right / down しか無いため、元ペインは
+  #                  常に左 / 上に残る。フォーカス中が既に 1/4 サイズなら、まだ 1/4 でない他のペインを
+  #                  代わりに割り、全部 1/4(= 4分割済み)なら何もしない。
+  #                  「全幅/全高を占めるか」を splits ツリーの構造ではなく rect とタブ area の比(0.6 超)で
+  #                  見る理由: 4分割済みかどうかは面積の話で、ツリーの形(左右を先に割ったか上下を先に割ったか)
+  #                  とは独立に決まるため。代わりに手動リサイズで 6:4 より偏らせたペインは「まだ割られていない」
+  #                  と見なされて更に割れるが、グリッドを保つ使い方では起きない。
   #                  herdr の layout.apply は端末を作り直す破壊的動作なので、非破壊なこの逐次分割方式を採る。
   #   right / down = フォーカス中のペインをその向きに分割する。
   # 新ペインのディレクトリは --cwd で明示する。シェルのペインなら herdr が渡す HERDR_ACTIVE_PANE_CWD、
@@ -292,13 +298,23 @@ in
       mode="''${1:-auto}"
 
       if [ "$mode" = auto ]; then
-        # 現在タブのレイアウトから、最大面積のペインとその分割方向を求める。
+        # 現在タブのレイアウトから、割るペインとその向きを求める。2x2 が埋まっていれば何も出力しない。
         read -r target dir < <(
           "$herdr" pane layout --pane "$active" \
-            | "$jq" -r '.result.layout.panes
-                | max_by(.rect.width * .rect.height)
-                | "\(.pane_id) \(if .rect.width > (2 * .rect.height) then "right" else "down" end)"'
-        )
+            | "$jq" -r --arg active "$active" '
+                .result.layout as $l
+                # タブ area の6割超を占める辺は、その向きにまだ割られていない。
+                | def dir_of:
+                    if .rect.width > $l.area.width * 0.6 then "right"
+                    elif .rect.height > $l.area.height * 0.6 then "down"
+                    else null end;
+                  [$l.panes[] | . + { dir: dir_of }] as $panes
+                | (
+                    ($panes[] | select(.pane_id == $active and .dir))
+                    // ($panes | map(select(.dir)) | max_by(.rect.width * .rect.height))
+                  ) as $t
+                | if $t then "\($t.pane_id) \($t.dir)" else empty end'
+        ) || true
         [ -n "''${target:-}" ] || exit 0
       else
         target=$active

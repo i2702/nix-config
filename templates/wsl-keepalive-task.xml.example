@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0"?>
 <!--
   Windows タスクスケジューラ \WSL-KeepAlive のテンプレート(WSL 機専用・リポジトリ管理外)。
 
@@ -10,6 +10,11 @@
     $xml = Get-Content <このファイル> -Raw -Encoding UTF8
     $xml = $xml -replace 'YOUR_WINDOWS_USERNAME', $env:USERNAME
     Register-ScheduledTask -TaskName 'WSL-KeepAlive' -Xml $xml -Force
+
+  1行目の宣言に encoding を書かないこと。Register-ScheduledTask へ渡るのは
+  Get-Content が返す UTF-16 の文字列なので、encoding="UTF-8" と書いてあると
+  宣言と実体が食い違い「タスク XML の形式が正しくありません」で弾かれる。
+  同じ理由でコメントの中に 2つ続けたハイフンも置けない (XML の仕様)。
 
   UserId と Arguments の distro 名 (Ubuntu) はマシンに合わせて書き換える。
   詳細と切り分けは MANUAL.md「WSL の sshd (:2222) を常時上げておく」を参照。

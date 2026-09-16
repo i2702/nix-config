@@ -64,6 +64,11 @@
     # 起動可否だけで判定すると Session 0 のソケットを有効とみなして先へ進み、
     # ddc-visible が全モニタで false になる。すると原因と無関係な「Windows から
     # 見えません」だけが出て、interop の取り違えが表に出なくなる。
+    #
+    # 当たりのソケットは Windows のタスク WSL-InteropAnchor が供給する
+    # (デスクトップセッションに wsl.exe を1本常駐させる。MANUAL.md 参照)。
+    # それでも総当たりを残すのは、常駐が死んでいる間は手で開いた WSL 端末の
+    # ソケットだけが当たりになり、そこへ落ちられないと全く動かなくなるため。
     cmm-ensure() {
       local sock
       cmm-monitors | grep -q "Short Monitor ID:" && return 0
@@ -73,7 +78,7 @@
         cmm-monitors | grep -q "Short Monitor ID:" && return 0
       done
 
-      print -u2 "ControlMyMonitor がモニタを列挙できません(デスクトップの見える WSL_INTEROP が無い)。Windows 側で WSL の端末を1つ開いてから再実行してください。"
+      print -u2 "ControlMyMonitor がモニタを列挙できません(デスクトップの見える WSL_INTEROP が無い)。Windows 側のタスク WSL-InteropAnchor が動いているか確認してください(応急処置は Windows で WSL の端末を1つ開く)。詳細は MANUAL.md。"
       return 1
     }
 

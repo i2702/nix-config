@@ -200,6 +200,87 @@ Get-ScheduledTaskInfo -TaskName 'WSL-KeepAlive'   # NextRunTime が空なら繰�
 
 ---
 
+## ディスプレイ切り替えのための WSL_INTEROP アンカー
+
+`disp-win` / `disp-mac`(`modules/controlmymonitor.nix`)を WSL 側から動かすために必要。
+定義は `templates/wsl-interop-anchor-task.xml.example`。
+
+### なぜ要るか
+
+WSL から Windows の exe を起動する interop は、`wsl.exe` を開いた Windows 側のプロセスが
+作る `/run/WSL/<pid>_interop` を通る。起動された exe は **そのソケットを提供した側の
+Windows セッションの中で動く**。
+
+WezTerm は WSL へ SSH (:2222) で入るため `wsl.exe` を経由しない。sshd から生えたシェルが
+掴めるのは Session 0 のソケットだけで、そこから起動した ControlMyMonitor は exit 0 で
+返るのにモニタを1台も列挙しない(デスクトップが無いため)。これが
+**「`disp-mac` でディスプレイをみつけられない」の正体**で、経路を変えない限り避けられない。
+
+`WSL-KeepAlive` は助けにならない。あれは `LogonType=S4U` なので Session 0 で走る。実測:
+
+| ソケットの由来 | Session | 列挙できるモニタ |
+| --- | --- | --- |
+| `WSL-KeepAlive` (S4U) | 0 | 0台 |
+| sshd から生えたシェル | 0 | 0台 |
+| Windows で手で開いた WSL 端末 | 1 | 見える |
+
+つまり **Windows 側で WSL の端末を手で開いている間だけ動く** 状態だった。このタスクは
+その1本を常駐で肩代わりする。
+
+ソケットは `/run/WSL` に置かれるただのファイルで、作った端末のセッションには紐づかない。
+そのため **他のマシンから SSH で入ったシェルからも同じものを掴める**。
+`wsl-interop-refresh` が mtime の新しい順に拾うので、常駐が最後に立ったソケットであれば
+総当たりに落ちず一発で当たる。
+
+### 登録
+
+**昇格は要らない。** `InteractiveToken` は自分自身の対話トークンを使うだけなので、
+他ユーザーとしてのログオン権限が要る `WSL-KeepAlive` の S4U と違い、ルートフォルダの
+タスクでも通常の PowerShell から登録できる。
+
+```powershell
+$xml = Get-Content <テンプレート> -Raw -Encoding UTF8
+$xml = $xml -replace 'YOUR_WINDOWS_USERNAME', "$env:USERDOMAIN\$env:USERNAME"
+Register-ScheduledTask -TaskName 'WSL-InteropAnchor' -Xml $xml -Force
+```
+
+テンプレートを書き換えるときの XML の制約が2つある。どちらも
+`Register-ScheduledTask` が「タスク XML の形式が正しくありません」としか言わないので、
+知らないと位置情報だけで直すことになる。
+
+- 宣言に `encoding` を書かない。`Get-Content` が渡すのは UTF-16 文字列なので、
+  `encoding="UTF-8"` と書いてあると宣言と実体が食い違って弾かれる
+- コメントの中に `--` を置かない(XML の仕様)。`--headless` のような文字列を
+  説明文に書くと通らない
+
+### 切り分け
+
+`disp-mac` が「モニタを列挙できません」で失敗したら、まず WSL 側でソケットを見る。
+
+```sh
+ls -t /run/WSL/*_interop   # 常駐が立てたものが先頭に居るか
+```
+
+Windows 側では State と Session を見る。Session 1 に `--exec sleep infinity` が
+居れば正常で、Session 0 にしか居なければ S4U のタスクしか動いていない。
+
+```powershell
+Get-ScheduledTask -TaskName 'WSL-InteropAnchor'   # State が Running か
+Get-CimInstance Win32_Process -Filter "Name='wsl.exe'" |
+  Select-Object ProcessId, SessionId, CommandLine
+```
+
+### 効かない場面
+
+- **ログオフ中**。`InteractiveToken` はログオンが前提なので、ログオフすると常駐も
+  ソケットも消える。画面ロックはログオフではないので Session 1 は残る
+- **切り替え先のモニタが既に別の入力を表示しているとき**。これは interop とは別の
+  問題で、エラーも `dell (DEL4276) が Windows から見えません` と別に出る。DELL は
+  Win 以外の入力へ移ると Windows の列挙から丸ごと消え、DDC が届かなくなるため、
+  この状態からは Mac 側の `disp-win` で戻すしかない(`## m1ddc` を参照)
+
+---
+
 ## Ghostty は tip チャンネルを使う
 
 ```sh

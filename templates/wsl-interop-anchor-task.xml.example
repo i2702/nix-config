@@ -1,0 +1,116 @@
+<?xml version="1.0"?>
+<!--
+  Windows タスクスケジューラ \WSL-InteropAnchor のテンプレート(WSL 機専用・リポジトリ管理外)。
+
+  デスクトップセッション(Session 1)に wsl.exe を1本常駐させ、/run/WSL に
+  「デスクトップの見える」interop ソケットを供給しつづける。これが無いと
+  modules/controlmymonitor.nix の disp-win / disp-mac が動かない。
+
+  WezTerm は WSL へ SSH (:2222) で入るため wsl.exe を経由しない。sshd から生えた
+  シェルが持つ interop ソケットは Session 0 に繋がっており、ControlMyMonitor.exe を
+  起動することはできてもデスクトップが無いのでモニタを1台も列挙しない。結果
+  「ControlMyMonitor がモニタを列挙できません」で切り替えが失敗する。Windows 側で
+  WSL の端末を手で開いている間だけ動く、という状態になっていたのを常駐で埋める。
+
+  ソケットは /run/WSL に置かれる普通のファイルで、作った端末のセッションには
+  紐づかない。そのため他のマシンから SSH で入ったシェルからも同じものを掴める
+  (cmm-ensure が候補を総当たりして拾う)。
+
+  WSL-KeepAlive とは役割が違うので分けてある。あちらは LogonType=S4U、つまり
+  Session 0 で走り、「ログオンしていなくても distro を保って :2222 を生かす」ための
+  もの。InteractiveToken に変えるとログオン中しか distro を掴まなくなり、sshd が
+  落ちる。逆にこちらを S4U にすると Session 0 になり、モニタが見えず用を成さない。
+
+  使い方 (昇格は不要。後述):
+    $xml = Get-Content <このファイル> -Raw -Encoding UTF8
+    $xml = $xml -replace 'YOUR_WINDOWS_USERNAME', "$env:USERDOMAIN\$env:USERNAME"
+    Register-ScheduledTask -TaskName 'WSL-InteropAnchor' -Xml $xml -Force
+
+  1行目の宣言に encoding を書かないこと。Register-ScheduledTask へ渡るのは
+  Get-Content が返す UTF-16 の文字列なので、encoding="UTF-8" と書いてあると
+  宣言と実体が食い違い「タスク XML の形式が正しくありません」で弾かれる。
+  同じ理由でコメントの中に 2つ続けたハイフンも置けない (XML の仕様)。
+
+  UserId と Arguments の distro 名 (Ubuntu) はマシンに合わせて書き換える。
+  詳細と切り分けは MANUAL.md「ディスプレイ切り替えのための WSL_INTEROP アンカー」を参照。
+-->
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <URI>\WSL-InteropAnchor</URI>
+    <Description>デスクトップセッションに wsl.exe を常駐させ、disp-win / disp-mac が使う WSL_INTEROP を供給する。詳細は nix-config の MANUAL.md。</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <!-- 繰り返しは TimeTrigger に持たせる。LogonTrigger 配下の Repetition はその
+         トリガーが発火した時点からしか回らず、登録し直した回は次のログオンまで
+         効かない (WSL-KeepAlive で BootTrigger を避けたのと同じ理由)。 -->
+    <TimeTrigger>
+      <Repetition>
+        <Interval>PT5M</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+      <StartBoundary>2026-01-01T00:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+    </TimeTrigger>
+    <!-- BootTrigger は置かない。InteractiveToken はログオン済みであることが前提で、
+         ログオン前に発火しても走れないため。立ち上げはこちらが担う。 -->
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <UserId>YOUR_WINDOWS_USERNAME</UserId>
+      <Delay>PT30S</Delay>
+    </LogonTrigger>
+    <EventTrigger>
+      <Enabled>true</Enabled>
+      <Subscription>&lt;QueryList&gt;&lt;Query Id="0" Path="System"&gt;&lt;Select Path="System"&gt;*[System[Provider[@Name='Microsoft-Windows-Power-Troubleshooter'] and EventID=1]]&lt;/Select&gt;&lt;/Query&gt;&lt;/QueryList&gt;</Subscription>
+      <Delay>PT15S</Delay>
+    </EventTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>YOUR_WINDOWS_USERNAME</UserId>
+      <!-- InteractiveToken でないと Session 0 に落ちてモニタが見えない。
+           これは自分自身の対話トークンで走らせるだけなので、S4U と違って
+           Register-ScheduledTask に UAC 昇格が要らない (ルートフォルダでも通る)。 -->
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <!-- 生きている間は5分ごとの発火が「既に実行中」として捨てられ、
+         常駐が死んだときだけ新しいものが立つ。 -->
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <Duration>PT10M</Duration>
+      <WaitTimeout>PT1H</WaitTimeout>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <DisallowStartOnRemoteAppSession>false</DisallowStartOnRemoteAppSession>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+    <WakeToRun>false</WakeToRun>
+    <!-- 既定の PT72H だと3日で常駐が止められる。 -->
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions>
+    <!-- wsl.exe を直に Exec しない。Session 1 で走らせると既定のコンソールホストが
+         開き、デスクトップに Windows Terminal のウィンドウが2枚残る (実測)。
+         conhost を headless モードで挟むとコンソールを画面に出さずに割り当てるので窓が出ない。
+         wscript.exe + VBS の Run(cmd, 0, True) でも窓0を確認したが、Windows 側に
+         .vbs を別途配置する必要があるうえ VBScript 自体が Windows 11 で段階的
+         廃止の予告済みなので採らなかった。headless モードが将来効かなくなったら
+         そちらへ退避できる。 -->
+    <Exec>
+      <Command>C:\Windows\System32\conhost.exe</Command>
+      <Arguments>--headless wsl.exe -d Ubuntu --exec sleep infinity</Arguments>
+    </Exec>
+  </Actions>
+</Task>

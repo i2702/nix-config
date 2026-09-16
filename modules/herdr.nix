@@ -107,12 +107,12 @@ in
     focus_pane_up = "alt+k"
     focus_pane_right = "alt+l"
 
-    # 方向指定の分割: Alt-v = 右に分割(縦線。vim の :vsplit と同じ向き) / Alt-s = 下に分割(横線)。
-    # 方向を自動判定してグリッドを保つ「自動タイル分割」は Alt-f。3つとも下の [[keys.command]] で
-    # split-pane.sh を呼ぶ(ネイティブの split_vertical / split_horizontal にしない理由は同スクリプト参照)。
-    # 以前は Alt-v / Alt-s の両方を自動タイルに充てて方向指定を prefix 側(Alt-t → v/s)に
-    # 追いやっていたが、2キーが同じ動作で冗長なうえ v/s が方向を連想させるのに区別されず、
-    # 「ここを右に割りたい」ときに2打必要だったので入れ替えた。prefix 側はネイティブのまま残す。
+    # 分割の Alt キーは、方向を自動判定してグリッドを保つ「自動タイル分割」の Alt-s だけにする。
+    # 下の [[keys.command]] で split-pane.sh を呼ぶ(ネイティブの split_vertical / split_horizontal に
+    # しない理由は同スクリプト参照)。向きを指定したいときは prefix 側(Alt-t → v = 右 / s = 下)の
+    # ネイティブ分割を使う。
+    # 以前は Alt-v / Alt-s を方向指定、Alt-f を自動タイルに充てていたが、Alt-s へ自動タイルを寄せて
+    # Alt-f / Alt-v は外した。
     split_vertical = "prefix+v"
     split_horizontal = "prefix+s"
 
@@ -152,25 +152,12 @@ in
     new_tab = ""
 
     # 分割。type = "shell" はバックグラウンド実行で、split-pane.sh が herdr CLI 経由で分割する。
-    #   Alt-f = 自動タイル分割: フォーカス中のペインを起点に 2x2 グリッドへ割る(4分割済みなら何もしない)
-    #   Alt-v / Alt-s = フォーカス中のペインを右 / 下に割る
-    [[keys.command]]
-    key = "alt+f"
-    type = "shell"
-    command = "~/.config/herdr/scripts/split-pane.sh auto"
-    description = "自動タイル分割(2x2 グリッドに追加)"
-
-    [[keys.command]]
-    key = "alt+v"
-    type = "shell"
-    command = "~/.config/herdr/scripts/split-pane.sh right"
-    description = "右に分割"
-
+    #   Alt-s = 自動タイル分割: フォーカス中のペインを起点に 2x2 グリッドへ割る(4分割済みなら何もしない)
     [[keys.command]]
     key = "alt+s"
     type = "shell"
-    command = "~/.config/herdr/scripts/split-pane.sh down"
-    description = "下に分割"
+    command = "~/.config/herdr/scripts/split-pane.sh auto"
+    description = "自動タイル分割(2x2 グリッドに追加)"
 
     # エージェント/ターミナルのペイン間フォーカス移動。
     # herdr の native な focus_agent はインデックス型(prefix+alt+1..9)しかなく、
@@ -204,7 +191,7 @@ in
     # Alt-; でスクラッチシェルをポップアップで開く。
     # type = "popup" はセッションモーダルの一時ターミナルで、タブのレイアウトを一切変えずに
     # 開いてコマンド終了で消える。「ちょっと1コマンド叩きたい」ためにペインを割って閉じる
-    # (Alt-f → Alt-q)手間を無くすのが目的。
+    # (Alt-s → Alt-q)手間を無くすのが目的。
     # キーが Alt-a でない理由: Alt-a は上のエージェントペインフォーカスで埋まっており、
     # そちらは使用頻度が高く動かしたくない。Alt-; は herdr デフォルトとも既存設定とも衝突しない。
     # なお句読点+修飾キーの到達性は端末依存(default-config にも注記あり)。届かない端末に
@@ -271,7 +258,7 @@ in
     kitty_graphics = true
   '';
 
-  # ペイン分割スクリプト(Alt-f / Alt-v / Alt-s から呼ばれる)。引数: auto | right | down。
+  # ペイン分割スクリプト(Alt-s から auto で呼ばれる)。引数: auto | right | down。
   #   auto         = 自動タイル分割。フォーカス中のペインを起点に 2x2 グリッドを作る。
   #                  タブの全幅を占めている(まだ縦に割られていない)なら縦線で2分割、全幅は無いが全高を
   #                  占めているなら横線で2分割。herdr の split は right / down しか無いため、元ペインは
@@ -282,7 +269,9 @@ in
   #                  とは独立に決まるため。代わりに手動リサイズで 6:4 より偏らせたペインは「まだ割られていない」
   #                  と見なされて更に割れるが、グリッドを保つ使い方では起きない。
   #                  herdr の layout.apply は端末を作り直す破壊的動作なので、非破壊なこの逐次分割方式を採る。
-  #   right / down = フォーカス中のペインをその向きに分割する。
+  #   right / down = フォーカス中のペインをその向きに分割する。今はどのキーにも割り当てていない。
+  #                  消さないのは、方向指定分割を Alt キーへ戻すときにネイティブ分割の cwd 問題(下記)を
+  #                  避ける手段としてそのまま使えるため。
   # 新ペインのディレクトリは --cwd で明示する。シェルのペインなら herdr が渡す HERDR_ACTIVE_PANE_CWD、
   # Claude Code のペインならフックが claudeCwdDir に残したセッション cwd(= space 名が示す場所)。
   # ネイティブの分割(new_cwd = "follow")に任せない理由: follow はペインの前面プロセスの cwd を

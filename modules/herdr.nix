@@ -58,6 +58,26 @@ let
   # space-label-follow.zsh が読む。herdr のトークンに置かない理由: 値は先頭80文字に切られて
   # フルパスを復元できず、live-handoff でも消えるため。
   claudeCwdDir = "${config.xdg.stateHome}/herdr/claude-cwd";
+
+  # 外側の端末のウィンドウタイトルとして herdr 自身に書かせる文字列。
+  # WSL (= Win 機) では "󰖳 Win"、Mac では空 (= herdr に書かせない)。
+  #
+  # 記号は Nerd Font の Windows ロゴ U+F05B3。TOML の \U エスケープで書くのは、
+  # 私用領域の字をソースに直接置くとエディタで豆腐に見え、編集事故になるため
+  # (同じ字を出す Mac 側の zsh も $'\U000F05B3 Win' で持っている: modules/zsh.nix)。
+  #
+  # Mac を空にする理由: ローカル " Mac" と ssh 中 "󰖳 Win" の出し分けは zsh が
+  # socket API (client.window_title.set) で行う。API 値は config より優先されるので
+  # 両方に持たせても効くが、出し先が2箇所に散るだけで得が無い。
+  #
+  # WSL に値を持たせる理由 (Why not: 空のままにしない): ssh 先の herdr を再起動しても
+  # Ghostty のタイトルが "󰖳 Win" に戻らなかった。herdr を抜けている間の ssh 側
+  # ログインシェルが oh-my-zsh の termsupport で OSC 2 ("%n@%m:%~" や実行中コマンド) を
+  # 書き、herdr を挟まない経路なのでそれが Mac まで素通りして、zsh が ssh 実行時に
+  # 立てた "󰖳 Win" を潰す。空だと herdr は何も書かないため潰れたままになる。
+  # herdr 自身に正しい値を書かせておけば、前面クライアントが付き直すたび
+  # (再起動 / live-handoff / 再アタッチ) にタイトルが戻る。
+  windowTitle = lib.optionalString pkgs.stdenv.isLinux "\\U000F05B3 Win";
 in
 {
   # herdr: AIエージェント時代のターミナルマルチプレクサ (https://herdr.dev)
@@ -236,17 +256,10 @@ in
     accent = "#ffaf00"
 
     [ui]
-    # 外側の端末(Ghostty)のウィンドウタイトルに herdr を触らせない。
-    # 既定値 "{hostname}: {workspace}" はクライアント起動時に OSC 0 を1回書く。これが
-    # Ghostty 直下で ssh した先で herdr を起動したときに Mac 側へ素通りし、zsh が立てた
-    # "󰖳 Win" (modules/zsh.nix) を "ayumi-hp: <space名>" へ潰していた。
-    # 0.7.5 には無く 0.8.2 で入った挙動なので、a00c0f5 の更新以降だけ再現する。
-    #
-    # Why not (ssh 側で立て直さない理由): タイトルを書くのは herdr のクライアント起動時
-    # なので、ssh 実行時に立てる zsh 側からは順序的に後追いできない。書かせない方が確実。
-    # 空にしても socket API の client.window_title.set は効くため、Mac 側で zsh が
-    # " Mac" / "󰖳 Win" を立てる仕組みはそのまま動く(実測で確認済み)。
-    window_title = ""
+    # 外側の端末(Ghostty / WezTerm)のウィンドウタイトル。前面クライアントが付くたびに
+    # OSC 0 で1回書かれる。値と、Mac が空で WSL だけ "󰖳 Win" を持つ理由は
+    # 冒頭の let の windowTitle 参照。
+    window_title = "${windowTitle}"
     # マウスを有効化
     mouse_capture = true
     # 名前入力なしでタブを即時作成する

@@ -57,7 +57,7 @@ let
     }
 
     config.font = wezterm.font 'HackGen Console NF'
-    config.font_size = 15
+    config.font_size = 16
 
     -- ウィンドウ分割やタブは tmux 側で行うため、WezTerm のタブバーは場所を取るだけ。
     -- 単一タブのときは隠す。

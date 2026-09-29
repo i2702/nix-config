@@ -1,5 +1,15 @@
-{ lib, ... }:
+{ lib, pkgs, ... }:
+let
+  # HDR の切り替えは displayplacer / m1ddc のどちらにも無いので自前で持つ。
+  disp-hdr = pkgs.runCommandCC "disp-hdr" { } ''
+    mkdir -p $out/bin
+    $CC -O2 -Wall -o $out/bin/disp-hdr ${./m1ddc/disp-hdr.c} \
+      -framework CoreGraphics -framework ColorSync -framework CoreFoundation
+  '';
+in
 {
+  home.packages = [ disp-hdr ];
+
   # 外部ディスプレイの入力切り替え(m1ddc / DDC-CI)。
   #
   # home.nix ではなく hosts/mac.nix からのみ import する。m1ddc は Apple Silicon 専用
@@ -103,7 +113,26 @@
     disp-extend() {
       displayplacer \
         "id:$(m1ddc-uuid benq) res:1920x1080 hz:60 scaling:on origin:(0,0) degree:0" \
-        "id:$(m1ddc-uuid dell) res:1920x1080 hz:60 scaling:on origin:(-1920,0) degree:0"
+        "id:$(m1ddc-uuid dell) res:1920x1080 hz:60 scaling:on origin:(-1920,0) degree:0" \
+        || return 1
+      disp-hdr-apply
+    }
+
+    # HDR: BenQ=ON / DELL=OFF。
+    # ミラー中は macOS が HDR を落とし、拡張へ戻しても復帰しないことがあるため、
+    # 状態を読んで判断せず毎回明示的に設定する。
+    # 失敗時に少し待って再試行するのは、入力を戻した直後の BenQ が
+    # まだ macOS から見えていない(オンラインになっていない)ことがあるため。
+    disp-hdr-apply() {
+      local i
+      for i in 1 2 3; do
+        disp-hdr "$(m1ddc-uuid benq)" on 2>/dev/null \
+          && disp-hdr "$(m1ddc-uuid dell)" off 2>/dev/null \
+          && return 0
+        sleep 2
+      done
+      echo "⚠️ HDR を設定できませんでした (disp-hdr で状態を確認)" >&2
+      return 1
     }
 
     # ミラーリング: DELL を主にして BenQ をその複製にする。

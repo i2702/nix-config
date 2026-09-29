@@ -43,26 +43,27 @@ name / email を埋める。詳細は README の「セットアップ」を参�
 
 ## m1ddc (ディスプレイ入力切り替え)
 
-`disp-win` / `disp-mac` / `m1ddc-probe` などの zsh 関数(`modules/m1ddc.nix`)が動くために必要。
+`disp-win` / `disp-mac` / `disp-fire2` / `m1ddc-probe` などの zsh 関数(`modules/m1ddc.nix`)が動くために必要。
 Mac 専用のため `hosts/mac.nix` からのみ import している。
 
-m1ddc は nixpkgs に無いので Homebrew で入れる。
+m1ddc は nixpkgs に無いので Homebrew で入れる。ミラー/拡張表示の切り替えに使う
+displayplacer も同様。
 
 ```bash
-brew install m1ddc
+brew install m1ddc displayplacer
 ```
 
-入っていない場合、関数は定義されるが実行時に `command not found: m1ddc` で失敗する。
+入っていない場合、関数は定義されるが実行時に `command not found` で失敗する。
 
 ### 入力コードと UUID
 
 DDC の VCP コード(0x60)は機種ごとに値が違い、MCCS 標準表(0x0F〜0x12)とも一致しない。
 下記は実測値なので、モニタを入れ替えたら取り直す。
 
-| ディスプレイ | Mac | Win |
-|---|---|---|
-| DELL U3223QE | 17 | 27 |
-| BenQ RD320UA | 19 (USB-C) | 15 (DP) |
+| ディスプレイ | Mac | Win | Fire2 |
+|---|---|---|---|
+| DELL U3223QE | 17 | 27 | - |
+| BenQ RD320UA | 19 (USB-C) | 15 (DP) | 18 (HDMI2) |
 
 `modules/m1ddc.nix` が持つ UUID もこの2台に紐づく。別のモニタでは
 `m1ddc display list detailed` で取り直す。

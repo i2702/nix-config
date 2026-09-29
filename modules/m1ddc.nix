@@ -7,7 +7,8 @@
   # stdenv.isDarwin でガードせず import 元で分けているのは、構成ファイルを読んだときに
   # 「この設定がどのホストに入るか」を条件式ではなく import 関係で追えるようにするため。
   #
-  # m1ddc 本体は nix ではなく homebrew 管理(brew install m1ddc)。新しいマシンでは
+  # m1ddc / displayplacer 本体は nix ではなく homebrew 管理
+  # (brew install m1ddc displayplacer)。新しいマシンでは
   # `home-manager switch` だけでは入らないので別途インストールが必要。
   programs.zsh.initContent = lib.mkOrder 1300 ''
     # ディスプレイ名 → UUID。m1ddcのdisplay番号(1,2...)を使わないのは、
@@ -83,6 +84,9 @@
     # Win表示中でもMac側からDDCが届くことは実機で確認済み。
     # 2周させるのは、DDC書き込みが応答を返さず取りこぼしを検知できないため。
     # 取りこぼすとWin表示のまま復帰操作をやり直すことになり手間が大きい。
+    # 入力を戻してから拡張表示へ戻す。BenQ が HDMI2 表示中でもミラー解除は通るが、
+    # 入力が戻る前に解除すると、見えていない BenQ 側へウィンドウが散るため。
+    # Win 表示から戻す場合も既に拡張表示なので、disp-extend は無害に通る。
     disp-mac() {
       local i
       for i in 1 2; do
@@ -90,7 +94,40 @@
         m1ddc-input benq 19 > /dev/null
         sleep 1
       done
-      echo "→ Mac (DELL=17 / BenQ=19)"
+      disp-extend
+      echo "→ Mac (DELL=17 / BenQ=19, 拡張表示)"
+    }
+
+    # 拡張表示: BenQ をメイン(0,0)、DELL をその左に置く。
+    # displayplacer の persistent id は m1ddc の UUID と同じ値なので m1ddc-uuid を流用する。
+    disp-extend() {
+      displayplacer \
+        "id:$(m1ddc-uuid benq) res:1920x1080 hz:60 scaling:on origin:(0,0) degree:0" \
+        "id:$(m1ddc-uuid dell) res:1920x1080 hz:60 scaling:on origin:(-1920,0) degree:0"
+    }
+
+    # ミラーリング: DELL を主にして BenQ をその複製にする。
+    # BenQ を主にしないのは、入力を HDMI2 へ切り替えた後も Mac からは BenQ が
+    # 接続中に見え続け、メニューバーや Dock が見えない画面に残ってしまうため。
+    disp-mirror() {
+      displayplacer \
+        "id:$(m1ddc-uuid dell)+$(m1ddc-uuid benq) res:1920x1080 hz:60 scaling:on origin:(0,0) degree:0"
+    }
+
+    # Mac の画面は DELL に集約し、BenQ を HDMI2 の機器(Fire)へ明け渡す。
+    #   BenQ RD320UA  18=HDMI2
+    # ミラーを先に済ませるのは、BenQ が Mac を表示しているうちに切り替え結果を
+    # 目視で確かめられるようにするため。DELL も 17 へ寄せるのは Win 表示からでも
+    # 一発で Mac に戻るようにするため。DDC の取りこぼし対策で2周させる理由は disp-mac と同じ。
+    disp-fire2() {
+      local i
+      disp-mirror || return 1
+      for i in 1 2; do
+        m1ddc-input dell 17 > /dev/null
+        m1ddc-input benq 18 > /dev/null
+        sleep 1
+      done
+      echo "→ Fire2 (DELL=17 ミラー / BenQ=18)"
     }
   '';
 }

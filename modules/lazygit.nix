@@ -44,8 +44,9 @@
         - develop
       commit:
         verbose: true # 詳細コミット情報表示
-      pagers:
+      diffRenderers:
         - useConfig: true # gitconfig pager使用(delta)
+          type: rawGit
       merging:
         edit: true # 外部エディタでマージ
       log:

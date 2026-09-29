@@ -71,6 +71,14 @@ in
       m1ddc display "$(m1ddc-uuid "$target")" set input "$code"
     }
 
+    # BenQ の音量を設定する: set-benq-vol 10
+    # 上限は 100 ではなく 50 (max volume の実測値)。
+    # m1ddc の chg volume を使わないのは、内部の読み取りが失敗すると 0 を基準に
+    # 加減算して書き込み、音量が意図せず飛ぶため。
+    set-benq-vol() {
+      m1ddc display "$(m1ddc-uuid benq)" set volume "''${1:?音量 (0-50) を指定してください}"
+    }
+
     # 2台まとめて Mac / Win へ切り替える。
     #   DELL U3223QE  17=Mac / 27=Win
     #   BenQ RD320UA  19=Mac(USB-C) / 15=Win(DP)

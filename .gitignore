@@ -1,3 +1,6 @@
 result
 result-*
 .direnv/
+
+# Claude Code が claude.ai から自動同期する skill のキャッシュ
+claude/skills/synced/

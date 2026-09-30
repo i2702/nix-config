@@ -58,6 +58,21 @@ in
     [worktree]
     auto_mkdir = true
     basedir = '~/worktrees'
+
+    # リポジトリごとの設定。リポジトリ側の .gwq.toml ではなく全体設定に書く。
+    # .gwq.toml は cwd のファイルをフルパス単位で信頼するため、ワークツリーごとに信頼の確認が出る。
+    # しかもその確認は、新しいペインの zsh 起動時の source <(gwq completion zsh) の中でも出る。
+    # そこはバックグラウンドのプロセスで端末を読めず、y を打っても進まないままペインが止まる。
+    # 全体設定は信頼の確認の対象外。
+    # repository は MatchPath(doublestar)でリポジトリの絶対パスと照合する。先頭を / にするのは、
+    # gwq の試験にある "/Users/**/repo" と同じ形にするため(先頭 ** の形は試験が無い)。
+    [[repository_settings]]
+    repository = "/**/up-stream/sptv-vega-tv-app"
+    setup_commands = [
+      # web/.env.e2e(IDCS 検証環境の secret)の実体はメインのチェックアウトにだけ置き、
+      # 各ワークツリーからはシンボリックリンクで参照する。複製だと secret を差し替えたときに古い値が残る。
+      'main="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"; [ -e web/.env.e2e ] || [ -L web/.env.e2e ] || ln -s "$main/web/.env.e2e" web/.env.e2e',
+    ]
   '';
 
   # gwq のシェル統合(補完 + cd/add ラッパー関数)。

@@ -10,6 +10,8 @@
 #
 # 既定は dry-run。--apply を付けたときだけ実際に削除する。
 set -euo pipefail
+# 既定パターンの +([!/]) や @(feature|...) を case で評価するため
+shopt -s extglob
 
 BASE=""
 APPLY=0
@@ -24,8 +26,11 @@ usage() {
 使い方: cleanup-merged-branches.sh [オプション]
 
   --base <ref>      取り込み先(既定: origin/main があればそれ、無ければ main)
-  --pattern <glob>  対象ブランチの glob。繰り返し指定可(既定: 'merge/*' 'sub/*')
-                    wip/* は glob では拾わず、--pattern wip/foo のように名指ししたときだけ対象
+  --pattern <glob>  対象ブランチの glob(bash の case 構文。extglob 有効)。繰り返し指定可
+                    既定: '+([!/])/@(feature|bugfix|fix|chore|refactor|docs|test)'(親ブランチ)と
+                          '+([!/])/sub/@(feature|bugfix|fix|chore|refactor|docs|test)/*'(サブブランチ)
+                    spike/* と wip/* は glob では拾わず、--pattern spike/foo のように
+                    名指ししたときだけ対象
   --apply           実際に削除する(既定は dry-run で一覧を出すだけ)
   --remote          リモート(origin)側の同名ブランチも削除する
   --keep-worktree   ワークツリーを消さない(ワークツリーを持つブランチは対象外になる)
@@ -56,7 +61,8 @@ while [ $# -gt 0 ]; do
 done
 
 if [ ${#PATTERNS[@]} -eq 0 ]; then
-  PATTERNS=('merge/*' 'sub/*')
+  KINDS='@(feature|bugfix|fix|chore|refactor|docs|test)'
+  PATTERNS=("+([!/])/$KINDS" "+([!/])/sub/$KINDS/*")
 fi
 
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "git リポジトリの中で実行してください" >&2; exit 2; }
@@ -89,7 +95,7 @@ merged_pr_of() {
 }
 
 # 絞り込みは bash の case で行う。git for-each-ref のパターンは `*` がスラッシュを跨がず、
-# 'sub/*' が sub/fix/xxx(3階層)を拾えないため
+# '+([!/])/sub/fix/*' が foo/sub/fix/xxx(4階層)を拾えないため
 matches_pattern() {
   local name="$1" p
   for p in "${PATTERNS[@]}"; do
@@ -125,9 +131,12 @@ while IFS= read -r b; do
 
   skip=""
   for p in "${PROTECTED_DEFAULT[@]}"; do [ "$b" = "$p" ] && skip="保護対象"; done
-  # wip/ を glob の一致で拾わないのは、作業途中の置き場だから。コミットを積む前の wip は
-  # 先端が base と同じ位置にあり、ancestor で取り込み済みと判定されてしまう
-  case "$b" in wip/*) named_explicitly "$b" || skip="wip/ は名指し時のみ対象(--pattern $b)" ;; esac
+  # spike/ と wip/ を glob の一致で拾わないのは、実験や作業途中の置き場で、取り込み判定が
+  # 「作業が済んだ」ことを意味しないから。コミットを積む前のブランチは先端が base と同じ
+  # 位置にあり、ancestor で取り込み済みと判定されてしまう
+  case "$b" in
+    spike/*|wip/*) named_explicitly "$b" || skip="${b%%/*}/ は名指し時のみ対象(--pattern $b)" ;;
+  esac
   [ "$b" = "${BASE#origin/}" ] && skip="base 自身"
   [ "$b" = "$CURRENT" ] && skip="現在のワークツリーがチェックアウト中"
   if [ -n "$wt" ] && [ "$KEEP_WORKTREE" -eq 1 ]; then skip="ワークツリー有り(--keep-worktree)"; fi

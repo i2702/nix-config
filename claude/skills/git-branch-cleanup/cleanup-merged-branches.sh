@@ -27,9 +27,12 @@ usage() {
 
   --base <ref>      取り込み先(既定: origin/main があればそれ、無ければ main)
   --pattern <glob>  対象ブランチの glob(bash の case 構文。extglob 有効)。繰り返し指定可
-                    既定: '+([!/])/@(feature|bugfix|fix|chore|refactor|docs|test)'(親ブランチ)と
-                          '+([!/])/sub/@(feature|bugfix|fix|chore|refactor|docs|test)/*'(サブブランチ)
-                    spike/* と wip/* は glob では拾わず、--pattern spike/foo のように
+                    既定(種別 = @(feature|bugfix|fix|chore|refactor|docs|test)):
+                      '種別/+([!/])'                   分割しない作業のブランチ
+                      '種別/+([!/])/main'              親ブランチ
+                      '種別/+([!/])/sub/種別/+([!/])'  サブブランチ
+                    旧ルール([名前]/[種別]、[名前]/sub/...)のブランチは既定では拾わない
+                    spike/* と wip/* は glob では拾わず、--pattern spike/feature/foo のように
                     名指ししたときだけ対象
   --apply           実際に削除する(既定は dry-run で一覧を出すだけ)
   --remote          リモート(origin)側の同名ブランチも削除する
@@ -62,7 +65,7 @@ done
 
 if [ ${#PATTERNS[@]} -eq 0 ]; then
   KINDS='@(feature|bugfix|fix|chore|refactor|docs|test)'
-  PATTERNS=("+([!/])/$KINDS" "+([!/])/sub/$KINDS/*")
+  PATTERNS=("$KINDS/+([!/])" "$KINDS/+([!/])/main" "$KINDS/+([!/])/sub/$KINDS/+([!/])")
 fi
 
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "git リポジトリの中で実行してください" >&2; exit 2; }
@@ -95,7 +98,7 @@ merged_pr_of() {
 }
 
 # 絞り込みは bash の case で行う。git for-each-ref のパターンは `*` がスラッシュを跨がず、
-# '+([!/])/sub/fix/*' が foo/sub/fix/xxx(4階層)を拾えないため
+# 'fix/*' のような利用者指定の glob で、階層を跨いだ fix/foo/sub/test/xxx まで拾えないため
 matches_pattern() {
   local name="$1" p
   for p in "${PATTERNS[@]}"; do

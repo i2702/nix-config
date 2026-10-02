@@ -143,6 +143,43 @@ in
       return 1
     }
 
+    # BenQ の現在モードが目標 (1920x1080 HiDPI @60Hz) になっているか。
+    # system_profiler ではなく displayplacer の current mode 行を見るのは、
+    # 崩れたときの Resolution/Hertz 行が実際のモードと食い違う値を返したため
+    # (800x600 @75Hz で動いているのに Resolution: 1920x1080 と出る)。
+    disp-mac-benq-ok() {
+      displayplacer list | awk -v id="$(m1ddc-uuid benq)" '
+        /^Persistent screen id:/ { f = ($4 == id) }
+        f && /<-- current mode/ { print; exit }
+      ' | grep -q 'res:1920x1080 hz:60 .*scaling:on'
+    }
+
+    # BenQ が 800x600 @75Hz などの予備モードに落ちたときに、拡張表示・60Hz・HDR ON へ戻す。
+    # Mac のスリープ明けに起きると見ている (Win 表示中の往復や画面スリープでは再現しなかった)。
+    #
+    # 目標モードを直に指定するだけでは、displayplacer が rc=0 を返しても反映されない
+    # ことがあったため、別モード (scaling:off) を一度経由させてから掛け直す。
+    # BenQ を enabled:false → true で接続し直させないのは、displayplacer は無効化した
+    # ディスプレイを見つけられなくなり、enabled:true で戻せないため (実機で確認)。
+    disp-mac-fix() {
+      local benq i
+      benq=$(m1ddc-uuid benq)
+      for i in 1 2 3; do
+        disp-extend > /dev/null 2>&1
+        sleep 2
+        disp-mac-benq-ok && break
+        displayplacer "id:$benq res:1920x1080 hz:60 scaling:off origin:(0,0) degree:0" > /dev/null 2>&1
+        sleep 2
+      done
+
+      if ! disp-mac-benq-ok; then
+        echo "⚠️ BenQ のモードを戻せませんでした。USB-C の抜き差しかモニタの電源入れ直しを試してください" >&2
+        return 1
+      fi
+      disp-hdr-apply || return 1
+      echo "→ BenQ 1920x1080 @60Hz / HDR ON"
+    }
+
     # ミラーリング: DELL を主にして BenQ をその複製にする。
     # BenQ を主にしないのは、入力を HDMI2 へ切り替えた後も Mac からは BenQ が
     # 接続中に見え続け、メニューバーや Dock が見えない画面に残ってしまうため。

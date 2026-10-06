@@ -779,6 +779,24 @@ in
       "nvim-neo-tree/neo-tree.nvim",
       branch = "v3.x",
       cmd = "Neotree",
+      -- `nvim .` で起動したときだけは cmd を待たずに読み込む。遅延させると
+      -- ディレクトリバッファが残ったまま、最初にツリーからファイルを開いた瞬間に
+      -- netrw hijack が発火し、開いたファイルを空バッファで上書きしてしまう。
+      init = function()
+        vim.api.nvim_create_autocmd("BufEnter", {
+          group = vim.api.nvim_create_augroup("NeotreeStartDir", { clear = true }),
+          callback = function()
+            if package.loaded["neo-tree"] then
+              return true
+            end
+            local stats = vim.uv.fs_stat(vim.fn.argv(0))
+            if stats and stats.type == "directory" then
+              require("neo-tree")
+              return true
+            end
+          end,
+        })
+      end,
       dependencies = {
         "nvim-lua/plenary.nvim",
         "nvim-tree/nvim-web-devicons",

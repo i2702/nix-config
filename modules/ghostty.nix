@@ -13,7 +13,7 @@
     font-family = HackGen Console NF
 
     # フォントサイズ (pt)。Ghostty のデフォルトは 13。
-    font-size = 18
+    font-size = 16
 
     # Option キーを Alt(Meta)として送る。
     # これが無いと macOS では Option が特殊文字入力になり、

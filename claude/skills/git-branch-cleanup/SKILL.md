@@ -16,7 +16,7 @@ description: >-
 | 分割しない作業 | `[種別]/[名前]` | 対象 |
 | 親ブランチ | `[種別]/[名前]/main` | 対象 |
 | サブブランチ | `[種別]/[親の名前]/sub/[種別]/[名前]` | 対象 |
-| 接頭辞付き | `spike/...`、`wip/...`(上記の先頭に付けたもの) | 名指ししたときだけ |
+| 接頭辞付き | `spike/...`、`wip/...`、`archive/...`(上記の先頭に付けたもの) | 名指ししたときだけ |
 
 `[種別]` は `feature|bugfix|fix|chore|refactor|docs|test` のいずれか。
 
@@ -83,9 +83,9 @@ description: >-
   スラッシュを含まない名前は明示しない限り触らない。
   ただし旧ルールの親ブランチで名前が種別と同じ語のもの(`docs/fix` など)は区別できず拾う。
   パターンは bash の `case` で評価する(`*` はスラッシュを跨ぐ。extglob 有効)
-- `spike/*` と `wip/*` は**名指ししたときだけ**対象にする。`--pattern spike/feature/foo` のように
+- `spike/*`・`wip/*`・`archive/*` は**名指ししたときだけ**対象にする。`--pattern spike/feature/foo` のように
   ブランチ名をそのまま渡したときに限り、`--pattern '*'` や `--pattern 'spike/*'` のような
-  glob で一致しても `SKIP` で残す。spike は実験、wip は作業途中の置き場で、取り込み判定が
+  glob で一致しても `SKIP` で残す。spike は実験、wip は作業途中、archive は保管の置き場で、取り込み判定が
   「作業が済んだ」ことを意味しない。特にコミットを積む前のブランチは先端が base と同じ位置に
   あるため、`ancestor` で取り込み済みと判定され、glob でまとめて拾うと消えてしまう。
   `spike/feature/foo/sub/fix/x` のような接頭辞付きのサブブランチも同じ扱い

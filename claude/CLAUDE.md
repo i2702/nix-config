@@ -28,8 +28,9 @@ gwqでリポジトリを作成して作業する。ブランチ名は以下の�
 
 親ブランチに `/main` を付けるのは、gitが `feature/foo` と `feature/foo/...` のブランチを同時に作れないため
 
-### 接頭辞 `spike/`、`wip/`
+### 接頭辞 `spike/`、`wip/`、`archive/`
 上記の名前の先頭につける(ex. `spike/feature/red-dialog`、`wip/fix/foo/sub/test/e2e`)
 
 - `spike/` は実験的な内容を扱う場合
 - `wip/` は作業途中で置いておく場合
+- `archive/` は残しておきたい内容を保管する場合。`wip/` と同様に扱う

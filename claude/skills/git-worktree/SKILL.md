@@ -18,6 +18,6 @@ Gitのワークツリーを操作するときはgwqコマンドを使う
 | 分割しない作業 | `[種別]/[名前]` | `gwq add -b docs/branch-cleanup` |
 | 親ブランチ | `[種別]/[名前]/main` | `gwq add -b docs/branch-cleanup/main` |
 | サブブランチ | `[種別]/[親の名前]/sub/[種別]/[名前]` | `gwq add -b docs/branch-cleanup/sub/fix/pattern` |
-| 接頭辞 `spike/`・`wip/` | 上記の先頭に付ける | `gwq add -b spike/feature/red-dialog` |
+| 接頭辞 `spike/`・`wip/`・`archive/` | 上記の先頭に付ける | `gwq add -b spike/feature/red-dialog` |
 
 マージ済みのブランチとワークツリーをまとめて片付けるときは [[git-branch-cleanup]] を使う。

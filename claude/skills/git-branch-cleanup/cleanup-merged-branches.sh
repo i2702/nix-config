@@ -32,7 +32,7 @@ usage() {
                       '種別/+([!/])/main'              親ブランチ
                       '種別/+([!/])/sub/種別/+([!/])'  サブブランチ
                     旧ルール([名前]/[種別]、[名前]/sub/...)のブランチは既定では拾わない
-                    spike/* と wip/* は glob では拾わず、--pattern spike/feature/foo のように
+                    spike/*・wip/*・archive/* は glob では拾わず、--pattern spike/feature/foo のように
                     名指ししたときだけ対象
   --apply           実際に削除する(既定は dry-run で一覧を出すだけ)
   --remote          リモート(origin)側の同名ブランチも削除する
@@ -134,11 +134,11 @@ while IFS= read -r b; do
 
   skip=""
   for p in "${PROTECTED_DEFAULT[@]}"; do [ "$b" = "$p" ] && skip="保護対象"; done
-  # spike/ と wip/ を glob の一致で拾わないのは、実験や作業途中の置き場で、取り込み判定が
+  # spike/・wip/・archive/ を glob の一致で拾わないのは、実験・作業途中・保管の置き場で、取り込み判定が
   # 「作業が済んだ」ことを意味しないから。コミットを積む前のブランチは先端が base と同じ
   # 位置にあり、ancestor で取り込み済みと判定されてしまう
   case "$b" in
-    spike/*|wip/*) named_explicitly "$b" || skip="${b%%/*}/ は名指し時のみ対象(--pattern $b)" ;;
+    spike/*|wip/*|archive/*) named_explicitly "$b" || skip="${b%%/*}/ は名指し時のみ対象(--pattern $b)" ;;
   esac
   [ "$b" = "${BASE#origin/}" ] && skip="base 自身"
   [ "$b" = "$CURRENT" ] && skip="現在のワークツリーがチェックアウト中"

@@ -68,7 +68,6 @@ in
     -- 👁️ 表示設定
     opt.number = true              -- 行番号表示
     opt.relativenumber = false     -- 絶対行番号に固定
-    opt.statuscolumn = '%s%=%{v:relnum?v:lnum:""} %{v:relnum?"":v:lnum} '
     opt.cursorline = true          -- カーソル行を強調
     opt.wrap = true                -- 折り返し有効
     opt.breakindent = true         -- 折り返し時のインデント保持
@@ -342,20 +341,6 @@ in
     })
 
 
-    -- 🔢 行番号の色を白寄りに
-    autocmd("ColorScheme", {
-      group = augroup("LineNrColor", { clear = true }),
-      pattern = "*",
-      callback = function()
-        vim.api.nvim_set_hl(0, "LineNr", { fg = "#aaaaaa" })
-        vim.api.nvim_set_hl(0, "CursorLineNr", { fg = "#ffffff", bold = true })
-      end,
-      desc = "行番号の色を白寄りに調整",
-    })
-    -- 初回読み込み時にも適用
-    vim.api.nvim_set_hl(0, "LineNr", { fg = "#aaaaaa" })
-    vim.api.nvim_set_hl(0, "CursorLineNr", { fg = "#ffffff", bold = true })
-
     -- 🪟 ウィンドウ境界線のハイライト(カラースキーム適用後に上書き)
     autocmd("ColorScheme", {
       group = augroup("WinSeparator", { clear = true }),
@@ -411,7 +396,6 @@ in
       require("plugins.telescope"),
       require("plugins.treesitter"),
       require("plugins.which-key"),
-      require("plugins.gitsigns"),
       require("plugins.mini"),
       require("plugins.neo-tree"),
     }, {
@@ -687,54 +671,8 @@ in
           { "<leader>b", group = "📄 バッファ" },
           { "<leader>c", group = "🔧 コード" },
           { "<leader>r", group = "✏️ リネーム" },
-          { "<leader>h", group = "🌿 Git hunk" },
-          { "<leader>g", group = "🌿 Git" },
-          { "<leader>gd", group = "差分基準" },
           { "<leader>s", group = "🔡 Surround" },
         },
-      },
-    }
-  '';
-
-  xdg.configFile."nvim/lua/plugins/gitsigns.lua".text = ''
-    -- 🌿 gitsigns: 変更行のサイン表示とhunk操作 (kickstart.nvim流)
-    return {
-      "lewis6991/gitsigns.nvim",
-      opts = {
-        signs = {
-          add = { text = "+" },
-          change = { text = "~" },
-          delete = { text = "_" },
-          topdelete = { text = "‾" },
-          changedelete = { text = "~" },
-        },
-        on_attach = function(bufnr)
-          local gs = require("gitsigns")
-          local function map(mode, l, r, desc)
-            vim.keymap.set(mode, l, r, { buffer = bufnr, desc = desc })
-          end
-
-          -- hunk間移動
-          map("n", "]h", function() gs.nav_hunk("next") end, "次の変更hunk")
-          map("n", "[h", function() gs.nav_hunk("prev") end, "前の変更hunk")
-
-          -- hunk操作
-          map("n", "<leader>hp", gs.preview_hunk, "hunkプレビュー")
-          map("n", "<leader>hs", gs.stage_hunk, "hunkをステージ")
-          map("n", "<leader>hr", gs.reset_hunk, "hunkをリセット")
-          map("n", "<leader>hb", gs.blame_line, "行のblame表示")
-
-          -- 差分基準の切替
-          map("n", "<leader>gdm", function()
-            local base = vim.fn.systemlist("git merge-base origin/develop HEAD")[1]
-            if vim.v.shell_error ~= 0 then
-              vim.notify("merge-base取得に失敗: " .. (base or ""), vim.log.levels.ERROR)
-              return
-            end
-            gs.change_base(base, true)
-          end, "PR差分モード(develop基準)")
-          map("n", "<leader>gdi", function() gs.change_base(nil, true) end, "index基準に戻す")
-        end,
       },
     }
   '';

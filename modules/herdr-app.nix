@@ -73,13 +73,14 @@ let
       # Alt-m で space 名変更(引数なしなのでアプリが名前を尋ねる)
       "alt-m" = "space.rename";
 
-      # space 操作。旧 herdr と同じく Alt-n で作成、Alt-o/p で前後、Alt-w で閉じる(確認あり)。
+      # space 操作。旧 herdr と同じく Alt-n で作成、Alt-o/p で前後、Alt-w で閉じる。
       # 旧 herdr の new-space.sh がしていた「アクティブ space の直下に作る」は再現していない
       # (space.new は末尾に足す。直下へ移すには作成後に space.move を呼ぶ mod が要る)。
       "alt-n" = "space.new";
       "alt-p" = "space.next";
       "alt-o" = "space.prev";
-      "alt-w" = "space.close";
+      # Alt-w は確認ダイアログ無しで閉じる(space.close の confirmed を渡すため mod 経由。close-space 参照)
+      "alt-w" = "mod.open:close-space";
 
       # Alt-a / Alt-Shift-a でエージェントを全 space 横断で巡回する。旧 herdr では focus-role.sh で
       # 自作していたが、herdr-app は agent.next / agent.prev をネイティブに持つ。
@@ -129,6 +130,9 @@ let
     option_as_alt = "on";
   };
 
+  # modules/herdr-app/<名前>/ に置いた自作 mod
+  mods = [ "autotile" "close-space" ];
+
   keysFile = pkgs.writeText "herdr-app-keys.json" (builtins.toJSON keys);
   settingsFile = pkgs.writeText "herdr-app-settings.json" (builtins.toJSON settings);
 in
@@ -143,13 +147,16 @@ in
   # 正本はこのモジュールなので、アプリ側で変えた値は次の hms で上書きされる。残したい変更はここへ移す。
   # 自作 mod も同じくコピーで置く。アプリが mod のフォルダへ jsconfig.json と型定義を書き込むため。
   home.activation = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
-    herdrAppConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    herdrAppConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] (''
       run mkdir -p "${appHome}"
       run install -m 644 ${keysFile} "${appHome}/keys.json"
       run install -m 644 ${settingsFile} "${appHome}/settings.json"
-      run mkdir -p "${appHome}/mods/autotile"
-      run install -m 644 ${./herdr-app/autotile/main.js} "${appHome}/mods/autotile/main.js"
-      run install -m 644 ${./herdr-app/autotile/mod.json} "${appHome}/mods/autotile/mod.json"
-    '';
+    '' + lib.concatMapStrings
+      (mod: ''
+        run mkdir -p "${appHome}/mods/${mod}"
+        run install -m 644 ${./herdr-app/${mod}/main.js} "${appHome}/mods/${mod}/main.js"
+        run install -m 644 ${./herdr-app/${mod}/mod.json} "${appHome}/mods/${mod}/mod.json"
+      '')
+      mods);
   };
 }

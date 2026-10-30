@@ -1,142 +1,134 @@
 COPY MODE に vim の ctrl-e / ctrl-y (カーソルの文字位置を保ったまま表示を1行スクロール) を追加する。
 
-herdr 0.7.5 時点で COPY MODE 内のキーは src/app/input/copy_mode.rs にハードコードされており、
+COPY MODE 内のキーは src/client/shell/copy_mode.rs にハードコードされており、
 config.toml の [keys] では変更できない (keys.copy_mode は「COPY MODE 開始」キーのみ)。
 そのため src パッチで先行導入する。上流に同等機能が入ったらこのパッチごと削除する。
+
+cursor.row は履歴先頭からの絶対行なので、スクロールしても同じテキスト行を指し続ける。
+画面外に出るときだけ表示範囲の端へ寄せる (vim と同じ)。
 
 ctrl 修飾キーは copy_mode_command_char() が None を返すため、既存の y (コピーして終了) /
 e (単語末尾へ移動) とは衝突しない (既存の ctrl-b と b の関係と同じ)。
 
---- a/src/app/input/copy_mode.rs
-+++ b/src/app/input/copy_mode.rs
-@@ -168,6 +168,12 @@
+diff --git a/src/client/shell/copy_mode.rs b/src/client/shell/copy_mode.rs
+index be5b63e3..1e9ef4f3 100644
+--- a/src/client/shell/copy_mode.rs
++++ b/src/client/shell/copy_mode.rs
+@@ -196,6 +196,14 @@ impl ClientShellState {
+                 self.move_copy_page(1, true, outcome);
+                 return;
              }
-             (KeyCode::Char('d'), mods) if mods.contains(KeyModifiers::CONTROL) => {
-                 self.scroll_copy_mode_page(terminal_runtimes, 1, true)
++            (KeyCode::Char('y'), modifiers) if modifiers.contains(KeyModifiers::CONTROL) => {
++                self.scroll_copy_line(-1, outcome);
++                return;
 +            }
-+            (KeyCode::Char('y'), mods) if mods.contains(KeyModifiers::CONTROL) => {
-+                self.scroll_copy_mode_line(terminal_runtimes, -1)
++            (KeyCode::Char('e'), modifiers) if modifiers.contains(KeyModifiers::CONTROL) => {
++                self.scroll_copy_line(1, outcome);
++                return;
 +            }
-+            (KeyCode::Char('e'), mods) if mods.contains(KeyModifiers::CONTROL) => {
-+                self.scroll_copy_mode_line(terminal_runtimes, 1)
-             }
              _ => {}
          }
-@@ -560,6 +566,55 @@
-         self.sync_copy_mode_selection(terminal_runtimes);
+ 
+@@ -575,6 +583,35 @@ impl ClientShellState {
+         outcome.repaint = true;
      }
  
-+    fn scroll_copy_mode_line(
-+        &mut self,
-+        terminal_runtimes: &TerminalRuntimeRegistry,
-+        direction: i16,
-+    ) {
-+        let Some(copy_mode) = self.copy_mode.as_ref() else {
-+            return;
-+        };
-+        let pane_id = copy_mode.pane_id;
-+        let mut cursor_row = copy_mode.cursor_row;
-+        let Some(info) = self.pane_info_by_id(pane_id).cloned() else {
-+            self.exit_copy_mode(terminal_runtimes, false);
-+            return;
-+        };
-+        if let Some(metrics) = self.pane_scroll_metrics(terminal_runtimes, pane_id) {
-+            if direction < 0 {
-+                if metrics.offset_from_bottom >= metrics.max_offset_from_bottom {
-+                    return;
-+                }
-+                self.set_pane_scroll_offset(
-+                    terminal_runtimes,
-+                    pane_id,
-+                    metrics.offset_from_bottom.saturating_add(1),
-+                );
-+                cursor_row = cursor_row
++    fn scroll_copy_line(&mut self, direction: i8, outcome: &mut ClientShellInput) {
++        let Some((pane_id, offset_from_bottom)) = self.copy_mode.as_mut().and_then(|copy_mode| {
++            let next_offset = if direction < 0 {
++                copy_mode
++                    .offset_from_bottom
 +                    .saturating_add(1)
-+                    .min(info.inner_rect.height.saturating_sub(1));
++                    .min(copy_mode.max_offset_from_bottom)
 +            } else {
-+                if metrics.offset_from_bottom == 0 {
-+                    return;
-+                }
-+                self.set_pane_scroll_offset(
-+                    terminal_runtimes,
-+                    pane_id,
-+                    metrics.offset_from_bottom - 1,
-+                );
-+                cursor_row = cursor_row.saturating_sub(1);
++                copy_mode.offset_from_bottom.saturating_sub(1)
++            };
++            if next_offset == copy_mode.offset_from_bottom {
++                return None;
 +            }
-+        } else if direction < 0 {
-+            self.scroll_pane_up(terminal_runtimes, pane_id, 1);
-+        } else {
-+            self.scroll_pane_down(terminal_runtimes, pane_id, 1);
-+        }
-+        if let Some(copy_mode) = self.copy_mode.as_mut() {
-+            copy_mode.cursor_row = cursor_row;
-+        }
-+        self.sync_copy_mode_selection(terminal_runtimes);
++            copy_mode.offset_from_bottom = next_offset;
++            let top = copy_mode
++                .max_offset_from_bottom
++                .saturating_sub(next_offset)
++                .min(u32::MAX as usize) as u32;
++            let bottom = top.saturating_add(u32::from(copy_mode.geometry.1.saturating_sub(1)));
++            copy_mode.cursor.row = copy_mode.cursor.row.clamp(top, bottom);
++            Some((copy_mode.pane_id.clone(), next_offset))
++        }) else {
++            return;
++        };
++        self.push_pane_scroll_offset(pane_id, offset_from_bottom, outcome);
++        self.sync_copy_selection();
++        outcome.repaint = true;
 +    }
 +
-     fn copy_mode_history_top(&mut self, terminal_runtimes: &TerminalRuntimeRegistry) {
-         let Some(copy_mode) = self.copy_mode.as_ref() else {
+     fn move_copy_history(&mut self, top: bool, outcome: &mut ClientShellInput) {
+         let Some(hit) = self.copy_hit() else {
              return;
-@@ -1188,9 +1243,61 @@
+diff --git a/src/client/shell/tests/copy.rs b/src/client/shell/tests/copy.rs
+index ee92ac19..ebc5c281 100644
+--- a/src/client/shell/tests/copy.rs
++++ b/src/client/shell/tests/copy.rs
+@@ -518,6 +518,62 @@ fn keyboard_copy_mode_owns_cursor_selection_copy_and_scroll_restore() {
+     )));
+ }
  
-         assert_eq!(app.state.mode, Mode::Copy);
-         assert_eq!(copy_mode_offset_from_bottom(&app, pane_id), expected_lines);
-+    }
++#[test]
++fn keyboard_copy_mode_ctrl_e_y_scroll_one_line_keeping_the_cursor_text_line() {
++    let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
++    state.set_snapshot(Box::new(snapshot()));
++    let mut pane_surface = surface();
++    pane_surface.panes[0].scroll = Some(crate::protocol::PaneSurfaceScrollMetrics {
++        offset_from_bottom: 0,
++        max_offset_from_bottom: 20,
++        viewport_rows: 2,
++    });
++    state.set_pane_surface(pane_surface);
++    state.compose(106, 20).expect("composed frame");
++    let mut enter = ClientShellInput::default();
++    state.record_binding(
++        crate::input::KeybindMatch::Action(crate::input::KeybindAction::CopyMode),
++        &mut enter,
++    );
++    let key = |c| {
++        RawInputEvent::Key(crate::input::TerminalKey::new(
++            KeyCode::Char(c),
++            KeyModifiers::CONTROL,
++        ))
++    };
++    let cursor_and_offset = |state: &ClientShellState| {
++        state
++            .copy_mode
++            .as_ref()
++            .map(|mode| (mode.cursor.row, mode.offset_from_bottom))
++    };
++    assert_eq!(cursor_and_offset(&state), Some((21, 0)));
 +
-+    #[tokio::test]
-+    async fn copy_mode_ctrl_e_at_bottom_keeps_position() {
-+        let bytes = numbered_lines_bytes(64);
-+        let (mut app, pane_id) = app_with_copy_scrollback(&bytes);
-+        app.state.enter_copy_mode(&app.terminal_runtimes);
-+        let cursor_row = app.state.copy_mode.as_ref().expect("copy mode").cursor_row;
++    let at_bottom = state.handle_raw_events(vec![key('e')]);
++    assert_eq!(state.mode, ClientShellMode::Copy);
++    assert!(at_bottom.actions.is_empty());
++    assert_eq!(cursor_and_offset(&state), Some((21, 0)));
 +
-+        app.handle_copy_mode_key(TerminalKey::new(KeyCode::Char('e'), KeyModifiers::CONTROL));
++    let up = state.handle_raw_events(vec![key('y')]);
++    assert_eq!(state.mode, ClientShellMode::Copy);
++    assert!(matches!(
++        &up.actions[..],
++        [ClientShellAction::Endpoint { request, .. }]
++            if matches!(
++                &request.method,
++                crate::api::schema::Method::PaneScroll(params)
++                    if params.offset_from_bottom == 1
++            )
++    ));
++    assert_eq!(cursor_and_offset(&state), Some((20, 1)));
 +
-+        assert_eq!(app.state.mode, Mode::Copy);
-+        assert_eq!(copy_mode_offset_from_bottom(&app, pane_id), 0);
-+        assert_eq!(
-+            app.state.copy_mode.as_ref().expect("copy mode").cursor_row,
-+            cursor_row
-+        );
-     }
- 
-     #[tokio::test]
-+    async fn copy_mode_ctrl_y_scrolls_one_line_clamping_cursor_to_screen() {
-+        let bytes = numbered_lines_bytes(64);
-+        let (mut app, pane_id) = app_with_copy_scrollback(&bytes);
-+        app.state.enter_copy_mode(&app.terminal_runtimes);
-+        let bottom_row = app.state.copy_mode.as_ref().expect("copy mode").cursor_row;
++    state.handle_raw_events(vec![key('y')]);
++    assert_eq!(cursor_and_offset(&state), Some((19, 2)));
 +
-+        app.handle_copy_mode_key(TerminalKey::new(KeyCode::Char('y'), KeyModifiers::CONTROL));
++    state.handle_raw_events(vec![key('e')]);
++    assert_eq!(cursor_and_offset(&state), Some((19, 1)));
++}
 +
-+        assert_eq!(app.state.mode, Mode::Copy);
-+        assert_eq!(copy_mode_offset_from_bottom(&app, pane_id), 1);
-+        assert_eq!(
-+            app.state.copy_mode.as_ref().expect("copy mode").cursor_row,
-+            bottom_row
-+        );
-+    }
-+
-+    #[tokio::test]
-+    async fn copy_mode_ctrl_e_keeps_cursor_on_same_text_line() {
-+        let bytes = numbered_lines_bytes(64);
-+        let (mut app, pane_id) = app_with_copy_scrollback(&bytes);
-+        app.state.enter_copy_mode(&app.terminal_runtimes);
-+        app.handle_copy_mode_key(TerminalKey::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
-+        let cursor_row = app.state.copy_mode.as_ref().expect("copy mode").cursor_row;
-+        let offset = copy_mode_offset_from_bottom(&app, pane_id);
-+
-+        app.handle_copy_mode_key(TerminalKey::new(KeyCode::Char('e'), KeyModifiers::CONTROL));
-+
-+        assert_eq!(copy_mode_offset_from_bottom(&app, pane_id), offset - 1);
-+        assert_eq!(
-+            app.state.copy_mode.as_ref().expect("copy mode").cursor_row,
-+            cursor_row - 1
-+        );
-+    }
-+
-+    #[tokio::test]
-     async fn copy_mode_prefix_takes_priority_over_ctrl_b_page_up() {
-         let bytes = numbered_lines_bytes(64);
-         let (mut app, pane_id) = app_with_copy_scrollback(&bytes);
+ #[test]
+ fn keyboard_selections_survive_output_and_copy_live_ranges() {
+     // Character and linewise selections have distinct anchor/range projections.

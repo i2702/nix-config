@@ -478,15 +478,14 @@ in
       ${macOnly}
 
       # ==========================================
-      # ターミナルマルチプレクサの自動起動(herdr / tmux の振り分け)
+      # ターミナルマルチプレクサの自動起動
       #   - Zed のターミナル($ZED_TERM が設定される)     → tmux
-      #   - それ以外(Ghostty など通常ターミナル)          → herdr
+      #   - それ以外(Ghostty など通常ターミナル)          → 何もしない(herdr は必要なときに手動で起動する)
       #
       # 【同時起動の防止】既に herdr($HERDR_PANE_ID)または tmux($TMUX)の
       #   セッション内にいる場合は何もしない。これで
-      #     - herdr ペイン内で再帰的に herdr が起動する
       #     - tmux 内で再帰的に tmux が起動する
-      #     - herdr と tmux が入れ子・二重に起動する
+      #     - herdr ペイン内で tmux が入れ子に起動する
       #   のいずれも防ぐ($HERDR_PANE_ID / $TMUX はどちらも子シェルへ継承される)。
       #
       # 【対話シェル限定】-o interactive のときだけ起動する。Zed エージェントパネルが
@@ -496,12 +495,8 @@ in
       #   (補足: Zed には通常ターミナルとエージェント用ターミナルを区別する環境変数が
       #    無いため、Zed のターミナルは一律 tmux とする。)
       # ==========================================
-      if [[ -o interactive && -z "$TMUX" && -z "$HERDR_PANE_ID" ]]; then
-        if [[ -n "$ZED_TERM" ]]; then
-          command -v tmux &> /dev/null && tmux
-        else
-          command -v herdr &> /dev/null && herdr
-        fi
+      if [[ -o interactive && -n "$ZED_TERM" && -z "$TMUX" && -z "$HERDR_PANE_ID" ]]; then
+        command -v tmux &> /dev/null && tmux
       fi
 
       # マージ済みローカルブランチを削除

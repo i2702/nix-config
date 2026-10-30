@@ -129,6 +129,8 @@ let
     # Option を常に Alt として送る。既定の "auto" は US / ABC 配列のときだけ Alt 扱いにし、
     # ATOK などの入力ソースでは Option が文字入力に使われて上の Alt 系キーが届かない。
     option_as_alt = "on";
+    # ターミナルのフォント。Ghostty(modules/ghostty.nix)と同じ HackGen Console NF
+    font = "HackGen Console NF";
   };
 
   # modules/herdr-app/<名前>/ に置いた自作 mod

@@ -1,0 +1,147 @@
+{ config, pkgs, lib, ... }:
+let
+  appHome = "${config.xdg.configHome}/herdr-app";
+
+  # 制御文字1つの文字列。Nix の文字列リテラルは \u エスケープを解釈しないため JSON 経由で作る。
+  ctrl = code: builtins.fromJSON ''"\u${code}"'';
+
+  # キー割り当て(https://herdr.dev のアプリ内ガイド ~/.config/herdr-app/AGENTS.md「Keys」)。
+  # アプリが初回起動時に書き出した既定値をそのまま持ち、その上に旧 herdr(modules/herdr.nix)の
+  # Alt 系を移している。既定値ごと持つ理由: keys.json は既定値への差分ではなくキー割り当ての
+  # 全体として読まれ、書かなかった既定キー(cmd-c など)が消えるおそれがあるため。
+  #
+  # 旧 herdr から移していないもの(Why not):
+  #   - prefix(Alt-t)系: herdr-app にプレフィックスキーの仕組みが無い。方向指定の分割は既定の
+  #     cmd-d / cmd-shift-d を使う
+  #   - Alt-s 自動タイル分割 / Alt-e シェルペイン巡回 / Alt-; ポップアップ: 相当するコマンドが無く、
+  #     mod(JS)で作る必要があるため今回は見送った
+  #   - Alt-r 設定リロード / Alt-d デタッチ / Alt-c コピーモード: ファイルは保存で即時反映され、
+  #     ウィンドウを閉じても端末は herdr-core に残り、選択はマウスでできるので不要
+  keys = {
+    global = {
+      "cmd-q" = "app.quit";
+      "cmd-h" = "app.hide";
+      "cmd-alt-h" = "app.hide_others";
+      "cmd-t" = "tab.new";
+      "cmd-w" = "tab.close";
+      "ctrl-tab" = "tab.next";
+      "ctrl-shift-tab" = "tab.prev";
+      "cmd-shift-]" = "tab.next";
+      "cmd-shift-[" = "tab.prev";
+      "cmd-alt-]" = "space.next";
+      "cmd-alt-[" = "space.prev";
+      "cmd-]" = "agent.next";
+      "cmd-[" = "agent.prev";
+      "cmd-shift-l" = "layout.switch";
+      "cmd-n" = "space.new";
+      "cmd-p" = "mod.open:picker";
+      "cmd-shift-p" = "app.palette";
+      "cmd-," = "app.settings";
+      "cmd-d" = "pane.split:right";
+      "cmd-shift-d" = "pane.split:down";
+      "cmd-shift-w" = "pane.close";
+      "cmd-shift-enter" = "pane.zoom";
+      "cmd-alt-left" = "pane.go:left";
+      "cmd-alt-right" = "pane.go:right";
+      "cmd-alt-up" = "pane.go:up";
+      "cmd-alt-down" = "pane.go:down";
+      "cmd-alt-shift-left" = "pane.swap:left";
+      "cmd-alt-shift-right" = "pane.swap:right";
+      "cmd-alt-shift-up" = "pane.swap:up";
+      "cmd-alt-shift-down" = "pane.swap:down";
+      "f2" = "tab.rename";
+      "shift-f2" = "space.rename";
+      "cmd-/" = "app.help";
+      "cmd-shift-/" = "app.help";
+      "cmd-b" = "layout.toggle:sidebar";
+      "cmd-=" = "app.zoom_in";
+      "cmd-+" = "app.zoom_in";
+      "cmd--" = "app.zoom_out";
+      "cmd-0" = "app.zoom_reset";
+
+      # ここから旧 herdr の Alt 系。Alt を使うには settings の option_as_alt が要る(下記)。
+
+      # Alt-h/j/k/l でペイン移動
+      "alt-h" = "pane.go:left";
+      "alt-j" = "pane.go:down";
+      "alt-k" = "pane.go:up";
+      "alt-l" = "pane.go:right";
+
+      # Alt-q でペインを閉じる
+      "alt-q" = "pane.close";
+
+      # Alt-m で space 名変更(引数なしなのでアプリが名前を尋ねる)
+      "alt-m" = "space.rename";
+
+      # space 操作。旧 herdr と同じく Alt-n で作成、Alt-o/p で前後、Alt-w で閉じる(確認あり)。
+      # 旧 herdr の new-space.sh がしていた「アクティブ space の直下に作る」は再現していない
+      # (space.new は末尾に足す。直下へ移すには作成後に space.move を呼ぶ mod が要る)。
+      "alt-n" = "space.new";
+      "alt-p" = "space.next";
+      "alt-o" = "space.prev";
+      "alt-w" = "space.close";
+
+      # Alt-a / Alt-Shift-a でエージェントを全 space 横断で巡回する。旧 herdr では focus-role.sh で
+      # 自作していたが、herdr-app は agent.next / agent.prev をネイティブに持つ。
+      "alt-a" = "agent.next";
+      "alt-shift-a" = "agent.prev";
+    }
+    # Cmd-1〜9 = タブ選択 / Ctrl-1〜9 = space 選択はアプリ既定。Alt-1〜9 は旧 herdr と同じく space 選択
+    // lib.listToAttrs (lib.concatMap
+      (n:
+        let i = toString n; in [
+          (lib.nameValuePair "cmd-${i}" "tab.select:${i}")
+          (lib.nameValuePair "ctrl-${i}" "space.select:${i}")
+          (lib.nameValuePair "alt-${i}" "space.select:${i}")
+        ])
+      (lib.range 1 9));
+
+    terminal = {
+      "cmd-c" = "terminal.copy";
+      "cmd-v" = "terminal.paste";
+      "ctrl-v" = "terminal.paste_image";
+      "alt-backspace" = "send:${ctrl "0017"}";
+      "cmd-left" = "send:${ctrl "0001"}";
+      "cmd-right" = "send:${ctrl "0005"}";
+      "cmd-backspace" = "send:${ctrl "0015"}";
+      # Alt-←/→ は旧 herdr と同じく space の前後移動にする。terminal 節は global 節より優先されるので、
+      # アプリ既定の単語移動(send:\eb / \ef)をここで置き換える。
+      "alt-left" = "space.prev";
+      "alt-right" = "space.next";
+    };
+  };
+
+  # 本人の設定(AGENTS.md「The person: settings.json」)。zoom / sounds / minimum_contrast /
+  # appearance はアプリが初回起動時に書いた値。
+  settings = {
+    zoom = 1;
+    sounds.enabled = true;
+    minimum_contrast = 1;
+    appearance = "dark";
+    # 旧 herdr の [theme.custom] accent と同じオレンジ
+    colors.accent = "#ffaf00";
+    # Option を常に Alt として送る。既定の "auto" は US / ABC 配列のときだけ Alt 扱いにし、
+    # ATOK などの入力ソースでは Option が文字入力に使われて上の Alt 系キーが届かない。
+    option_as_alt = "on";
+  };
+
+  keysFile = pkgs.writeText "herdr-app-keys.json" (builtins.toJSON keys);
+  settingsFile = pkgs.writeText "herdr-app-settings.json" (builtins.toJSON settings);
+in
+{
+  # herdr-app: herdr のデスクトップアプリ版(旧 herdr = TUI とは別物。modules/herdr.nix とは独立)。
+  # 本体は公式インストーラで入れたアプリで(~/.local/bin/herdr-app はアプリ自身が張るリンク)、
+  # 自動更新もアプリに任せるため nix ではパッケージを入れない。Mac でだけ使っている。
+  #
+  # 設定ファイルは xdg.configFile の読み取り専用シンボリックリンクにせず、activation で書き込み可能な
+  # コピーとして置く。理由: アプリは設定画面から settings.json を書き換え、escape hatch
+  # (ctrl-alt-shift-escape)では keys.json を退避する。読み取り専用だとこれらが失敗する。
+  # 正本はこのモジュールなので、アプリ側で変えた値は次の hms で上書きされる。残したい変更はここへ移す。
+  home.activation = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
+    herdrAppConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      run mkdir -p "${appHome}"
+      run install -m 644 ${keysFile} "${appHome}/keys.json"
+      run install -m 644 ${settingsFile} "${appHome}/settings.json"
+    '';
+  };
+}

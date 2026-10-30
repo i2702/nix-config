@@ -24,6 +24,7 @@
     ./modules/zsh.nix
     ./modules/git.nix
     ./modules/herdr.nix
+    ./modules/herdr-app.nix
     ./modules/tmux.nix
     ./modules/vim.nix
     ./modules/neovim.nix

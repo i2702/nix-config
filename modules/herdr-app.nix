@@ -13,7 +13,7 @@ let
   # 旧 herdr から移していないもの(Why not):
   #   - prefix(Alt-t)系: herdr-app にプレフィックスキーの仕組みが無い。方向指定の分割は既定の
   #     cmd-d / cmd-shift-d を使う
-  #   - Alt-s 自動タイル分割 / Alt-e シェルペイン巡回 / Alt-; ポップアップ: 相当するコマンドが無く、
+  #   - Alt-e シェルペイン巡回 / Alt-; ポップアップ: 相当するコマンドが無く、
   #     mod(JS)で作る必要があるため今回は見送った
   #   - Alt-r 設定リロード / Alt-d デタッチ / Alt-c コピーモード: ファイルは保存で即時反映され、
   #     ウィンドウを閉じても端末は herdr-core に残り、選択はマウスでできるので不要
@@ -85,6 +85,10 @@ let
       # 自作していたが、herdr-app は agent.next / agent.prev をネイティブに持つ。
       "alt-a" = "agent.next";
       "alt-shift-a" = "agent.prev";
+
+      # Alt-s で自動タイル分割(2x2 グリッドへ割っていく)。旧 herdr の split-pane.sh auto を
+      # mod(herdr-app/autotile)に移したもの。判定の詳細は同 mod のコメント参照。
+      "alt-s" = "mod.open:autotile";
     }
     # Cmd-1〜9 = タブ選択 / Ctrl-1〜9 = space 選択はアプリ既定。Alt-1〜9 は旧 herdr と同じく space 選択
     // lib.listToAttrs (lib.concatMap
@@ -137,11 +141,15 @@ in
   # コピーとして置く。理由: アプリは設定画面から settings.json を書き換え、escape hatch
   # (ctrl-alt-shift-escape)では keys.json を退避する。読み取り専用だとこれらが失敗する。
   # 正本はこのモジュールなので、アプリ側で変えた値は次の hms で上書きされる。残したい変更はここへ移す。
+  # 自作 mod も同じくコピーで置く。アプリが mod のフォルダへ jsconfig.json と型定義を書き込むため。
   home.activation = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
     herdrAppConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       run mkdir -p "${appHome}"
       run install -m 644 ${keysFile} "${appHome}/keys.json"
       run install -m 644 ${settingsFile} "${appHome}/settings.json"
+      run mkdir -p "${appHome}/mods/autotile"
+      run install -m 644 ${./herdr-app/autotile/main.js} "${appHome}/mods/autotile/main.js"
+      run install -m 644 ${./herdr-app/autotile/mod.json} "${appHome}/mods/autotile/mod.json"
     '';
   };
 }

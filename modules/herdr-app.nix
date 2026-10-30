@@ -67,8 +67,9 @@ let
       "alt-k" = "pane.go:up";
       "alt-l" = "pane.go:right";
 
-      # Alt-q でペインを閉じる
-      "alt-q" = "pane.close";
+      # Alt-q でペインを閉じる。最後のペインで space ごと消えるときも確認ダイアログを出さない
+      # (pane.close に confirmed が無いので mod 経由。close-pane 参照)
+      "alt-q" = "mod.open:close-pane";
 
       # Alt-m で space 名変更(引数なしなのでアプリが名前を尋ねる)
       "alt-m" = "space.rename";
@@ -131,7 +132,7 @@ let
   };
 
   # modules/herdr-app/<名前>/ に置いた自作 mod
-  mods = [ "autotile" "close-space" ];
+  mods = [ "autotile" "close-space" "close-pane" ];
 
   keysFile = pkgs.writeText "herdr-app-keys.json" (builtins.toJSON keys);
   settingsFile = pkgs.writeText "herdr-app-settings.json" (builtins.toJSON settings);

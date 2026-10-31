@@ -9,20 +9,72 @@
 // ペインの大きさは herdr-core の "herdr-app" ドキュメント(space > tab > row/column の分割ツリー)から
 // 求める。mod の API(panes())はペインの位置も大きさも返さないため。
 // ドキュメントは hc CLI に取得コマンドが無く、`hc connect`(API を stdin/stdout で話す)に doc.get を送る。
+// exec に標準入力を渡す手段が無いので、シェルのパイプで流し込む。
 //
 // オーバーレイとして開く理由: `<mod>.<command>` のキー割り当ては表示中の mod にしか届かず、
 // 常駐させるにはレイアウトに場所を取るブロックが要る。mod.open なら開いたときだけ動ける。
 import { View, div } from "gpui-kit";
-import { closeOverlay, exec, focused, notify, props, run, spaces } from "herdr";
+import { closeOverlay, exec, focused, notify, props, run, spaces, window } from "herdr";
 
 const THRESHOLD = 0.6;
 
+// Windows の手元で hc connect に1行送って1行受け取る PowerShell スクリプト。
+// パイプ(`'...' | hc connect`)にしない理由: Windows 版の hc connect は標準入力が EOF になると
+// 応答を書く前に終了し、出力が空になる(Linux 版は応答してから終わる)。応答を読むまで stdin を開けておく。
+// 応答は UTF-8 のバイト列のまま stdout へ書く。Console 経由だと CP932 に変換され、日本語の space 名が化ける。
+function powershellDocGet(req) {
+  return [
+    "$s = New-Object System.Diagnostics.ProcessStartInfo 'hc', 'connect'",
+    "$s.UseShellExecute = $false",
+    "$s.RedirectStandardInput = $true",
+    "$s.RedirectStandardOutput = $true",
+    "$s.StandardOutputEncoding = [System.Text.Encoding]::UTF8",
+    "$p = [System.Diagnostics.Process]::Start($s)",
+    `$p.StandardInput.WriteLine('${req}')`,
+    "$p.StandardInput.Flush()",
+    "$b = [System.Text.Encoding]::UTF8.GetBytes($p.StandardOutput.ReadLine() + \"`n\")",
+    "$p.StandardInput.Close()",
+    "$p.WaitForExit()",
+    "$o = [Console]::OpenStandardOutput()",
+    "$o.Write($b, 0, $b.Length)",
+    "$o.Flush()",
+  ].join("\n");
+}
+
+// -EncodedCommand に渡す形(UTF-16LE を base64 にしたもの)。-Command に文字列で渡さない理由:
+// 引数のクォートが exec と powershell.exe の2段で解釈され、JSON の " が崩れるおそれがあるため。
+function encodePowerShell(script) {
+  const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const bytes = [];
+  for (let i = 0; i < script.length; i++) {
+    const c = script.charCodeAt(i);
+    bytes.push(c & 0xff, c >> 8);
+  }
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 3) {
+    const n = (bytes[i] << 16) | ((bytes[i + 1] ?? 0) << 8) | (bytes[i + 2] ?? 0);
+    out += B64[n >> 18] + B64[(n >> 12) & 63];
+    out += i + 1 < bytes.length ? B64[(n >> 6) & 63] : "=";
+    out += i + 2 < bytes.length ? B64[n & 63] : "=";
+  }
+  return out;
+}
+
+// 別マシンの space でも hc connect は手元で動かし、params.on で手元の core から中継させる。
+// exec の on でそのマシン上の sh に hc connect させない理由: core 経由の sh は PATH に
+// ~/.local/bin(hc の置き場)を含まず、hc が見つからない。
+// 手元に sh の無い Windows は PowerShell で送る(JSON に ' は含まれないので '...' に埋め込める)。
 async function readLayoutDoc(machine) {
   const params = { name: "herdr-app" };
   if (machine) params.on = machine;
   const req = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "doc.get", params });
-  const r = await exec("sh", ["-c", 'printf "%s\\n" "$1" | hc connect', "sh", req]);
-  const res = JSON.parse(r.stdout.trim().split("\n").pop());
+  const r =
+    window().platform === "windows"
+      ? await exec("powershell", ["-NoProfile", "-NonInteractive", "-EncodedCommand", encodePowerShell(powershellDocGet(req))])
+      : await exec("sh", ["-c", 'printf "%s\\n" "$1" | hc connect', "sh", req]);
+  const last = r.stdout.trim().split("\n").pop();
+  if (!last) throw new Error(`hc connect の応答が空 (exit ${r.code}): ${r.stderr.trim()}`);
+  const res = JSON.parse(last);
   if (res.error) throw new Error(res.error.message);
   return res.result.value;
 }

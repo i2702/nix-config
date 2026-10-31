@@ -40,6 +40,7 @@
     ./modules/ghostty.nix
     ./modules/zed.nix
     ./modules/claude-code.nix
+    ./modules/aobazuku.nix
   ];
 
   programs.home-manager.enable = true;

@@ -1,0 +1,13 @@
+# ~/.config/aobazuku/config.local.toml のテンプレート(このマシン専用・リポジトリ管理外)。
+#
+# 公開リポジトリと Nix store に App Password を載せないため、aobazuku の認証情報は
+# この "config.local.toml" でマシンごとに設定する。managed 設定(modules/aobazuku.nix)の
+# config.toml に重ねて読まれ、ここに書いたキーが勝つ([[columns]] は配列ごと差し替え)。
+#
+# 使い方:
+#   install -m 600 templates/aobazuku-config.local.example ~/.config/aobazuku/config.local.toml
+#   # その後 handle / app_password を自分の値に書き換える
+#
+# App Password は Bluesky の Settings → App Passwords で発行する(本パスワードは使わない)。
+handle = "yourname.bsky.social"
+app_password = "xxxx-xxxx-xxxx-xxxx"

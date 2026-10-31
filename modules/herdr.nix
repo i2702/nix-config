@@ -163,7 +163,7 @@ in
     next_workspace = ["alt+p", "alt+right"]
     previous_workspace = ["alt+o", "alt+left"]
 
-    # Alt-w で space を閉じる(confirm_close がデフォルト有効のため確認モーダルが出る)
+    # Alt-w で space を閉じる(確認モーダルは [ui] の confirm_close = false で出さない)
     close_workspace = "alt+w"
 
     # Alt-1〜9 で space 直接選択
@@ -267,6 +267,9 @@ in
     # タブが1つのときはタブバーを表示しない。new_tab 無効化(keys 参照)と合わせると
     # タブは常に1つなので、タブ UI が完全に見えなくなる
     hide_tab_bar_when_single_tab = true
+    # space を閉じるときの確認モーダルを出さない(Alt-w / サイドバーからの close、
+    # space 最後のペインを Alt-q で閉じたときも同じ設定で確認が省かれる)
+    confirm_close = false
 
     [ui.sidebar.spaces]
     # space カードの2行: 1行目 = space 名(フォーカス中ペインのリポジトリ名) / 2行目 = そのブランチ。

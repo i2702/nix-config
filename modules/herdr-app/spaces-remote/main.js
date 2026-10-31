@@ -2,6 +2,10 @@
 // grouped by machine when more than one is known. After a space's name, the repo
 // its first terminal is in now, only where unusual: branch, ahead/behind. Agent state lives in the agents list, not here. Click to
 // switch, right-click for its menu, drag to reorder.
+//
+// [nix-config] 同梱の spaces mod(0.1.10)の複製。Windows では手元(PowerShell)を使わず WSL の
+// マシンで作業するため、This computer の見出しと手元の space を出さない(grouped() 参照)。
+// 手元の space 自体は残るので、space.select の番号や space.next / prev には含まれる。
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
@@ -234,7 +238,9 @@ export default class Spaces extends View {
     };
     const loadingRow = m => div().id(`machine-loading-${m ?? "local"}`).h(28).flex_none().px(8).text_size(12).text_color(t.dim).child(collapsed ? "…" : "Loading…");
     if (!remote.length) return loading(null) && !rows.length ? [loadingRow(null)] : rows.map(draw);
-    const machineNames = [null, ...remote];
+    // [nix-config] 手元(null)を並べない。上の「マシンが1つも無いときは見出し無しで全部出す」は残す:
+    // hc machine ls の結果が来る前の起動直後や、マシンを外したときに空のサイドバーにしないため。
+    const machineNames = remote;
     return machineNames.flatMap((m) => {
       const mine = rows.filter((r) => (r.w.machine ?? null) === m);
       const machine = this.machines.find(k => k.name === m);

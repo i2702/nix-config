@@ -219,8 +219,14 @@ let
     option_as_alt = "on";
   };
 
-  # modules/herdr-app/<名前>/ に置いた自作 mod
-  mods = [ "autotile" "close-space" "close-pane" "new-space" ];
+  # modules/herdr-app/<名前>/ に置いた自作 mod。
+  # spaces-remote(This computer を出さない spaces の複製)と、それを使う layouts/main-remote.json は
+  # Windows だけに置く。Mac は手元で作業するので This computer を消さない。
+  # 表示するレイアウトの選択はアプリが shared.json に書く状態なので nix では持たない
+  # (新しい Windows 機では一度 `herdr-app do layout.switch --name main-remote` する)。
+  mods = [ "autotile" "close-space" "close-pane" "new-space" ]
+    ++ lib.optionals (!isDarwin) [ "spaces-remote" ];
+  layouts = lib.optionals (!isDarwin) [ "main-remote" ];
 
   keysFile = pkgs.writeText "herdr-app-keys.json" (builtins.toJSON keys);
   settingsFile = pkgs.writeText "herdr-app-settings.json" (builtins.toJSON settings);
@@ -249,7 +255,12 @@ in
       run install -m 644 ${./herdr-app/${mod}/main.js} "${appHome}/mods/${mod}/main.js"
       run install -m 644 ${./herdr-app/${mod}/mod.json} "${appHome}/mods/${mod}/mod.json"
     '')
-    mods + ''
+    mods + lib.concatMapStrings
+    (layout: ''
+      run mkdir -p "${appHome}/layouts"
+      run install -m 644 ${./herdr-app/layouts/${layout}.json} "${appHome}/layouts/${layout}.json"
+    '')
+    layouts + ''
     fi
   '');
 }

@@ -165,9 +165,10 @@ let
       "alt-m" = "space.rename";
 
       # space 操作。旧 herdr と同じく Alt-n で作成、Alt-o/p で前後、Alt-w で閉じる。
+      # Alt-n は表示中の space と同じマシンに作る(space.new に machine を渡すため mod 経由。new-space 参照)。
       # 旧 herdr の new-space.sh がしていた「アクティブ space の直下に作る」は再現していない
       # (space.new は末尾に足す。直下へ移すには作成後に space.move を呼ぶ mod が要る)。
-      "alt-n" = "space.new";
+      "alt-n" = "mod.open:new-space";
       "alt-p" = "space.next";
       "alt-o" = "space.prev";
       # Alt-w は確認ダイアログ無しで閉じる(space.close の confirmed を渡すため mod 経由。close-space 参照)
@@ -219,7 +220,7 @@ let
   };
 
   # modules/herdr-app/<名前>/ に置いた自作 mod
-  mods = [ "autotile" "close-space" "close-pane" ];
+  mods = [ "autotile" "close-space" "close-pane" "new-space" ];
 
   keysFile = pkgs.writeText "herdr-app-keys.json" (builtins.toJSON keys);
   settingsFile = pkgs.writeText "herdr-app-settings.json" (builtins.toJSON settings);

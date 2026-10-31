@@ -41,6 +41,15 @@ name / email を埋める。詳細は README の「セットアップ」を参�
 
 ---
 
+## aobazuku の認証情報
+
+`templates/aobazuku-config.local.example` を `~/.config/aobazuku/config.local.toml` に
+`install -m 600` でコピーし、handle / app_password を埋める。共有設定の
+`config.toml` は `modules/aobazuku.nix` が配るので、App Password はこちらにだけ書く。
+無くても activation は警告を出すだけで止まらない。
+
+---
+
 ## m1ddc (ディスプレイ入力切り替え)
 
 `disp-win` / `disp-mac` / `disp-fire2` / `m1ddc-probe` などの zsh 関数(`modules/m1ddc.nix`)が動くために必要。

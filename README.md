@@ -24,6 +24,10 @@
 cp templates/git-config.local.example ~/.config/git/config.local
 #    → ~/.config/git/config.local を開き name / email を自分の値に書き換える
 
+#    aobazuku を使うなら認証情報も用意する（無くても activation は警告だけで続く）
+install -m 600 templates/aobazuku-config.local.example ~/.config/aobazuku/config.local.toml
+#    → handle / app_password を自分の値に書き換える
+
 # 2. 適用（home-manager CLI 未導入なら nix run 版を使う）
 #    macOS:
 home-manager switch --flake .#mac
@@ -58,6 +62,7 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 │   └── ghostty.nix  wezterm.nix
 └── templates/
     ├── git-config.local.example       # git identity のテンプレート
+    ├── aobazuku-config.local.example  # aobazuku の認証情報のテンプレート
     └── wsl-keepalive-task.xml.example # WSL の distro を保持するタスク定義 (WSL 機のみ)
 ```
 

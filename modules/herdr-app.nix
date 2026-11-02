@@ -169,8 +169,9 @@ let
       # 旧 herdr の new-space.sh がしていた「アクティブ space の直下に作る」は再現していない
       # (space.new は末尾に足す。直下へ移すには作成後に space.move を呼ぶ mod が要る)。
       "alt-n" = "mod.open:new-space";
-      "alt-p" = "space.next";
-      "alt-o" = "space.prev";
+      # Alt-o/p は組み込みの space.prev / next(登録順)ではなくサイドバーの表示順で動かす(space-step.js 参照)。
+      "alt-p" = "mod.open:space-next";
+      "alt-o" = "mod.open:space-prev";
       # Alt-w は確認ダイアログ無しで閉じる(space.close の confirmed を渡すため mod 経由。close-space 参照)
       "alt-w" = "mod.open:close-space";
 
@@ -190,8 +191,8 @@ let
     # アプリ既定(Mac は terminal 節の単語移動 send:\eb / \ef、Windows は global 節のペイン移動)を
     # ここで置き換える。
     terminal = {
-      "alt-left" = "space.prev";
-      "alt-right" = "space.next";
+      "alt-left" = "mod.open:space-prev";
+      "alt-right" = "mod.open:space-next";
     };
   };
 
@@ -224,9 +225,11 @@ let
   # Windows だけに置く。Mac は手元で作業するので This computer を消さない。
   # 表示するレイアウトの選択はアプリが shared.json に書く状態なので nix では持たない
   # (新しい Windows 機では一度 `herdr-app do layout.switch --name main-remote` する)。
-  mods = [ "autotile" "close-space" "close-pane" "new-space" ]
+  mods = [ "autotile" "close-space" "close-pane" "new-space" ] ++ spaceStepMods
     ++ lib.optionals (!isDarwin) [ "spaces-remote" ];
   layouts = lib.optionals (!isDarwin) [ "main-remote" ];
+  # mod は自分のフォルダの中しか import できないので、共通部分を step.js として両方へ配る。
+  spaceStepMods = [ "space-next" "space-prev" ];
 
   keysFile = pkgs.writeText "herdr-app-keys.json" (builtins.toJSON keys);
   settingsFile = pkgs.writeText "herdr-app-settings.json" (builtins.toJSON settings);
@@ -256,6 +259,10 @@ in
       run install -m 644 ${./herdr-app/${mod}/mod.json} "${appHome}/mods/${mod}/mod.json"
     '')
     mods + lib.concatMapStrings
+    (mod: ''
+      run install -m 644 ${./herdr-app/space-step.js} "${appHome}/mods/${mod}/step.js"
+    '')
+    spaceStepMods + lib.concatMapStrings
     (layout: ''
       run mkdir -p "${appHome}/layouts"
       run install -m 644 ${./herdr-app/layouts/${layout}.json} "${appHome}/layouts/${layout}.json"

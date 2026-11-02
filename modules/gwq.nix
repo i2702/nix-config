@@ -77,9 +77,37 @@ in
 
   # gwq のシェル統合(補完 + cd/add ラッパー関数)。
   # cd.launch_shell = false のとき、completion 出力の末尾に gwq() ラッパーが付き、
-  # `gwq cd`(alias cw も同じ)が現在のシェルで builtin cd するようになる。
+  # `gwq cd` / `gwq add`(cw も同じ)が現在のシェルで builtin cd するようになる。
   # compdef を使うため oh-my-zsh の compinit 後(mkOrder 1200 の後)に読み込む。
   programs.zsh.initContent = lib.mkOrder 1300 ''
     command -v gwq >/dev/null && source <(gwq completion zsh)
+
+    # ローカルブランチと、リモートブランチのリモート名を除いた名前を列挙する
+    __cw_branches() {
+      {
+        git for-each-ref --format='%(refname:lstrip=2)' refs/heads
+        git for-each-ref --format='%(refname:lstrip=3)' refs/remotes
+      } 2>/dev/null | command grep -Fxv HEAD | sort -u
+    }
+
+    cw() {
+      # git worktree list の branch 行で照合する。gwq list / gwq get は部分一致なので、
+      # 別のブランチのワークツリーを「作成済み」と誤判定する。
+      if (( $# == 1 )) \
+        && __cw_branches | command grep -Fxq -- "$1" \
+        && ! git worktree list --porcelain | command grep -Fxq -- "branch refs/heads/$1"; then
+        gwq add "$1"
+      else
+        gwq cd "$@"
+      fi
+    }
+
+    _cw() {
+      (( CURRENT == 2 )) || return
+      local -a branches
+      branches=("''${(@f)$(__cw_branches)}")
+      compadd -a branches
+    }
+    compdef _cw cw
   '';
 }

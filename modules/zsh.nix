@@ -315,7 +315,6 @@ in
       # 色やページャの制御は rg-page / rgf-page 側で持つ
       rg = ''noglob rg-page'';
       rgf = ''noglob rgf-page'';
-      cw = "gwq cd";
       hms = hmSwitch;
     } // lib.optionalAttrs pkgs.stdenv.isLinux {
       e = "explorer.exe";

@@ -25,7 +25,7 @@
    - `--import-exe` は省略しない。省略するとサーバが自分の旧 store パスを再実行して更新されない。
    - `herdr server stop` は使わない。ペインのプロセス (作業中のエージェント含む) を全部殺す。
    - herdr のサーバが起動していない環境ではエラーになるだけなので無視してよい。
-   - 引き継ぎ後に `herdr pane list` が `protocol_mismatch` でなく結果を返すことを確認して報告する。詳細は `claude/skills/herdr/SKILL.md`。
+   - 引き継ぎ後に `herdr pane list` が `protocol_mismatch` でなく結果を返すことを確認して報告する。詳細は `claude/skills/herdr-config/SKILL.md`。
 
 # よく使う命令
 - 現在の変更について、home-managerでの適用 → コミット → push を行うことを「いつもの」と呼ぶ。適用は上記「home-managerの適用」に従うこと (適用後の検証 1〜4、herdr の live-handoff を含む)

@@ -1,9 +1,10 @@
 ---
-name: herdr
+name: herdr-config
 description: >-
-  herdr(ターミナルマルチプレクサ)の本体を更新するとき、設定を変えるときに必ず使う。
+  herdr(旧来のターミナルマルチプレクサ、herdr TUI)の本体を更新するとき、設定を変えるときに必ず使う。
   「herdr」「live-handoff」「protocol_mismatch」「kitty_graphics」に言及されたときも、
   ユーザーが明示的に指示しなくても参照する。
+  Herdr app(herdr-app)や herdr-core(hc)でのエージェント・ペイン操作は herdr-app スキルを使う。
 ---
 
 # herdr の操作

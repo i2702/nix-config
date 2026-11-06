@@ -451,6 +451,14 @@ in
       # vp node
       [ -f "$HOME/.vite-plus/env" ] && . "$HOME/.vite-plus/env"
 
+      # pnpm add -g したパッケージのコマンド (cf 等)。`pnpm setup` に任せないのは、
+      # .zshrc が nix store への symlink で書き込めず、書けても hms で消えるため。
+      # PNPM_HOME を明示するのは、未設定だと macOS では ~/Library/pnpm になり
+      # OS ごとに置き場所が分かれるため。末尾に足すのは、グローバルに入れた
+      # パッケージが nix 供給のコマンドより優先されないようにするため。
+      export PNPM_HOME="$HOME/.local/share/pnpm"
+      export PATH="$PATH:$PNPM_HOME/bin"
+
       # 新規ターミナル(ホーム直起動)時の初期作業ディレクトリを ~/Repository に変更
       # マルチプレクサ自動起動より前に実行し、tmux セッションの初期ディレクトリにも反映させる。
       # $PWD == $HOME に限定することで、プロジェクト内で開いた新規ペインが飛ばされるのを防ぐ。

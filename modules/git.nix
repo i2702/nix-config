@@ -59,15 +59,18 @@
   programs.git = {
     enable = true;
 
-    # git 2.55.0 は nixpkgs 未収録(master も 2.54.0)のため src を差し替えて先行導入する。
-    # nixpkgs が 2.55.0 に追従したらこの package 上書きごと削除する。
+    # nixpkgs 収録版より新しい git を使うため src を差し替える。
+    # 2.55.1 は 2026-11 公表の脆弱性(CVE-2026-111760 ほか)の修正バックポート版。
+    # 2.56.1 へ上げない理由: 下のパッチ除外・テスト調整は 2.55 系で検証済みで、
+    # 2.56 系にすると flake.lock の nixpkgs 更新と合わせて再検証が要る。
+    # nixpkgs が修正版(2.56.1 以降)に追従したらこの package 上書きごと削除する。
     # overlay で pkgs.git 全体を上書きしない理由: gitMinimal 経由で fetch 系ツールチェーン
     # (Python/cargo-vendor 等)が芋づる式にソースビルドになるため、ユーザー向け git に限定する。
     package = pkgs.git.overrideAttrs (old: rec {
-      version = "2.55.0";
+      version = "2.55.1";
       src = pkgs.fetchurl {
         url = "https://www.kernel.org/pub/software/scm/git/git-${version}.tar.xz";
-        hash = "sha256-RX/bBNyHKOAH1GiGleaRLm9oByeSDypAvxHqzBdQU1c=";
+        hash = "sha256-e8NF26I8kIn6cbz055PRPSBP3Jm5arwRizopwYFZ6xY=";
       };
       # 2.54.0 向けの nixpkgs パッチのうち 2.55.0 で不要・不適合になったものを除外する:
       # - osxkeychain: 上流が GITLIBS += $(RUST_LIB) で同等の修正を取り込み済み

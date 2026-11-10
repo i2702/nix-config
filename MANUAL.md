@@ -52,7 +52,7 @@ name / email を埋める。詳細は README の「セットアップ」を参�
 
 ## m1ddc (ディスプレイ入力切り替え)
 
-`disp-win` / `disp-mac` / `disp-fire2` / `m1ddc-probe` などの zsh 関数(`modules/m1ddc.nix`)が動くために必要。
+`disp-win` / `disp-mac` / `disp-fire1` / `disp-fire2` / `m1ddc-probe` などの zsh 関数(`modules/m1ddc.nix`)が動くために必要。
 Mac 専用のため `hosts/mac.nix` からのみ import している。
 
 m1ddc は nixpkgs に無いので Homebrew で入れる。ミラー/拡張表示の切り替えに使う

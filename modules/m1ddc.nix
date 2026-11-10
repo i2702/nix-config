@@ -188,20 +188,25 @@ in
         "id:$(m1ddc-uuid dell)+$(m1ddc-uuid benq) res:1920x1080 hz:60 scaling:on origin:(0,0) degree:0"
     }
 
-    # Mac の画面は DELL に集約し、BenQ を HDMI2 の機器(Fire)へ明け渡す。
-    #   BenQ RD320UA  18=HDMI2
+    # Mac の画面は DELL に集約し、BenQ を HDMI の機器(Fire)へ明け渡す: disp-fire 18 Fire2
+    #   BenQ RD320UA  17=HDMI1 / 18=HDMI2
     # ミラーを先に済ませるのは、BenQ が Mac を表示しているうちに切り替え結果を
     # 目視で確かめられるようにするため。DELL も 17 へ寄せるのは Win 表示からでも
     # 一発で Mac に戻るようにするため。DDC の取りこぼし対策で2周させる理由は disp-mac と同じ。
-    disp-fire2() {
+    disp-fire() {
+      local code="''${1:?BenQ の入力コードを指定してください}"
+      local label="''${2:-Fire}"
       local i
       disp-mirror || return 1
       for i in 1 2; do
         m1ddc-input dell 17 > /dev/null
-        m1ddc-input benq 18 > /dev/null
+        m1ddc-input benq "$code" > /dev/null
         sleep 1
       done
-      echo "→ Fire2 (DELL=17 ミラー / BenQ=18)"
+      echo "→ $label (DELL=17 ミラー / BenQ=$code)"
     }
+
+    disp-fire1() { disp-fire 17 Fire1; }
+    disp-fire2() { disp-fire 18 Fire2; }
   '';
 }

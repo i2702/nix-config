@@ -138,6 +138,33 @@ tccutil reset AppleEvents com.raycast.macos
   `osascript -e 'tell application "Ghostty" to get name of every window'` で実際の
   タイトルを見る (ターミナルからは Ghostty 自身への送信なので許可なしで通る)
 
+### hitoka のビルドと補助アクセス (hitoka-benq / hitoka-dell)
+
+hitoka-benq / hitoka-dell は、フルスクリーンではないウィンドウを指定した
+ディスプレイへ集める。実体は [hitoka](https://github.com/i2702/hitoka) で、
+`modules/raycast.nix` のスクリプトは `<ghq root>/github.com/i2702/hitoka/build/hitoka.app`
+を `open` で起動するだけ。hitoka は nix の管理外なので、手でビルドする。
+
+```sh
+ghq get i2702/hitoka
+cd "$(ghq root)/github.com/i2702/hitoka"
+./scripts/build-app.sh
+```
+
+初回の実行で macOS が補助アクセスの許可を求める。システム設定 → プライバシーと
+セキュリティ → **アクセシビリティ** で **hitoka** を ON にしてから、もう一度実行する。
+許可が要るのは hitoka だけで、Raycast には要らない。
+
+hitoka は ad-hoc 署名なので、ビルドし直すと許可が外れる。ビルドし直したあとに
+「アクセシビリティの許可がありません」と出たら、一覧の hitoka を一度消して付け直す。
+
+失敗した回だけ `~/.cache/raycast-gather-windows.log` に残る。
+
+- 「hitoka.app がありません」 → 上のビルドをしていない。
+- 「…に一致するディスプレイがありません」 → ディスプレイの名前が変わった。
+  `build/hitoka.app/Contents/MacOS/hitoka --list` で接続中の名前を確かめ、
+  `modules/raycast.nix` の `gatherTargets` を直す。
+
 ---
 
 ## WSL の sshd (:2222) を常時上げておく

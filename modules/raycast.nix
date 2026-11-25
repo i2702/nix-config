@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, config, ... }:
 let
   # ウィンドウタイトルで Ghostty のウィンドウを探して前面に出す Raycast Script Command。
   #
@@ -139,10 +139,96 @@ let
       match = "Win";
     }
   ];
+
+  # フルスクリーンではないウィンドウを、指定したディスプレイへ集める Raycast Script Command。
+  # 実体は hitoka (github.com/i2702/hitoka)。ディスプレイの入力を別の機器へ明け渡した
+  # (modules/m1ddc.nix の disp-*) あと、見えなくなった側に残ったウィンドウを拾うのに使う。
+  #
+  # Why not (hitoka の中身をここで osascript として書かない理由): 他アプリのウィンドウを
+  # 動かすには Accessibility API が要り、Raycast の子プロセスから叩くと補助アクセスの
+  # 許可は Raycast に要求される (上の focusCommand が System Events を避けたのと同じ事情)。
+  # .app を open で起動すれば launchd の下で動くので、許可は hitoka だけに付き、
+  # Raycast には何の権限も要らない。
+  #
+  # Why not (hitoka を nix でビルドしない理由): hitoka は ad-hoc 署名で、補助アクセスの
+  # 許可はバイナリのハッシュに紐づく。nix の生成物にすると、nixpkgs の更新でツールチェーンが
+  # 変わるたびにハッシュが変わり、許可を GUI で付け直すことになる。手でビルドした
+  # 成果物をそのまま指しておけば、hitoka を触らない限り許可は外れない。
+  # ビルドと許可の手順は MANUAL.md。
+  hitokaApp =
+    let
+      # home.nix の ~/nix-config と同じく、ghq root はホストごとの設定から導出する。
+      ghqRoot = builtins.replaceStrings [ "~" ] [ config.home.homeDirectory ]
+        config.programs.git.settings.ghq.root;
+    in
+    "${ghqRoot}/github.com/i2702/hitoka/build/hitoka.app";
+
+  gatherCommand =
+    { name, display }:
+    {
+      name = "raycast/scripts/${name}.sh";
+      value = {
+        executable = true;
+        text = ''
+          #!${pkgs.bash}/bin/bash
+          # このファイルは nix (home-manager) の生成物。直接編集しても switch で上書きされる。
+          # 変更は ~/nix-config/modules/raycast.nix を編集して home-manager switch する。
+
+          # @raycast.schemaVersion 1
+          # @raycast.title ${name}
+          # @raycast.mode silent
+          # @raycast.packageName Window
+          # @raycast.icon 🧲
+          # @raycast.description フルスクリーンではないウィンドウを、名前に "${display}" を含むディスプレイへ集める
+
+          app="${hitokaApp}"
+          if [[ ! -d "$app" ]]; then
+            echo "hitoka.app がありません。hitoka のリポジトリで scripts/build-app.sh を実行してください"
+            exit 1
+          fi
+
+          # open は起動したアプリの終了コードを返さないので、成否は stderr の有無で見分ける
+          # (hitoka は失敗したときだけ stderr に書く)。
+          # 毎回新しいファイルにするのは、open --stderr が上書きではなく追記するため。
+          # 使い回すと前回のエラーを今回の失敗と取り違える。
+          err=$(mktemp)
+          trap 'rm -f "$err"' EXIT
+          open -W -a "$app" --stderr "$err" --args "${display}"
+          msg=$(tail -n 1 "$err")
+
+          # 失敗したときだけ喋る (focus-*-window.sh と同じ方針)。
+          if [[ -n "$msg" ]]; then
+            mkdir -p "$HOME/.cache"
+            printf '%s  %s  %s\n' "$(date '+%F %T')" "$0" "$msg" >> "$HOME/.cache/raycast-gather-windows.log"
+            echo "$msg"
+            exit 1
+          fi
+        '';
+      };
+    };
+
+  # name は Raycast の検索欄に打つコマンド名 (ファイル名にも使う)。
+  # display は hitoka に渡すディスプレイ名の一部。接続中の名前は hitoka --list で確かめる。
+  #
+  # Why not (ホットキーもここで割り当てない理由): Raycast はホットキーとエイリアスを
+  # 内部の DB に持ち、ファイルからは宣言できない。名前を打って呼ぶ使い方なら、
+  # タイトルを決めるだけで足りる。
+  gatherTargets = [
+    {
+      name = "hitoka-benq";
+      display = "BenQ";
+    }
+    {
+      name = "hitoka-dell";
+      display = "DELL";
+    }
+  ];
 in
 {
   # 置き場所は ~/.config/raycast/scripts/。Raycast は決め打ちのディレクトリを見に行くのでは
   # なく、設定で登録されたディレクトリだけを走査する。登録は GUI からしか出来ず nix では
   # 宣言できないので、新しいマシンでは一度だけ手で行う (手順は MANUAL.md)。
-  xdg.configFile = builtins.listToAttrs (map focusCommand targets);
+  xdg.configFile = builtins.listToAttrs (
+    map focusCommand targets ++ map gatherCommand gatherTargets
+  );
 }

@@ -183,6 +183,9 @@ let
       # Alt-s で自動タイル分割(2x2 グリッドへ割っていく)。旧 herdr の split-pane.sh auto を
       # mod(herdr-app/autotile)に移したもの。判定の詳細は同 mod のコメント参照。
       "alt-s" = "mod.open:autotile";
+
+      # Alt-. で picker(Cmd-P と同じ)。文字入力で tab・space・エージェントを絞り込み Enter で移る。
+      "alt-." = "mod.open:picker";
     }
     # Alt-1〜9 は旧 herdr と同じく space 選択
     // digitKeys (i: { "alt-${i}" = "space.select:${i}"; });

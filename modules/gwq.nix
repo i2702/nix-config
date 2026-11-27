@@ -90,15 +90,41 @@ in
       } 2>/dev/null | command grep -Fxv HEAD | sort -u
     }
 
+    # 新規ブランチの派生元。develop があれば develop、なければ main。
+    # ローカルを優先し、無いときだけ origin/ を使う。
+    __cw_base() {
+      local ref
+      for ref in refs/heads/develop refs/remotes/origin/develop refs/heads/main refs/remotes/origin/main; do
+        if git show-ref --verify --quiet "$ref"; then
+          print -r -- "$ref"
+          return 0
+        fi
+      done
+      return 1
+    }
+
     cw() {
+      # 引数1つ以外(引数なし・フラグ付き)と git リポジトリ外は gwq cd にそのまま渡す
+      if (( $# != 1 )) || [[ $1 == -* ]] || ! git rev-parse --git-dir >/dev/null 2>&1; then
+        gwq cd "$@"
+        return
+      fi
+
       # git worktree list の branch 行で照合する。gwq list / gwq get は部分一致なので、
       # 別のブランチのワークツリーを「作成済み」と誤判定する。
-      if (( $# == 1 )) \
-        && __cw_branches | command grep -Fxq -- "$1" \
-        && ! git worktree list --porcelain | command grep -Fxq -- "branch refs/heads/$1"; then
+      if git worktree list --porcelain | command grep -Fxq -- "branch refs/heads/$1"; then
+        gwq cd "$1"
+      elif __cw_branches | command grep -Fxq -- "$1"; then
         gwq add "$1"
       else
-        gwq cd "$@"
+        # ブランチも無いので新しく切る。gwq add -b はカレントの HEAD から切るので使わない。
+        git check-ref-format --branch "$1" >/dev/null || return 1
+        local base
+        base="$(__cw_base)" || { print -u2 "cw: develop も main も見つかりません"; return 1; }
+        # origin/... から切ると上流が origin/develop 等になり、誤って push しかねないので --no-track
+        git branch --no-track -- "$1" "$base" || return 1
+        print -u2 "cw: $1 を ''${base#refs/*/} から作成しました"
+        gwq add "$1"
       fi
     }
 

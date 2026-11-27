@@ -232,7 +232,7 @@ in
     -- Comment.nvim や mini.comment を入れないのは、組み込み版が treesitter の
     -- language injection を見て commentstring を引くため(混在ファイルで正しい記号を選ぶ)。
     -- 端末により 0x1F(<C-_>) と kitty keyboard protocol の <C-/> のどちらが届くかが
-    -- 変わる(herdrは後者を有効化する)ため、両方を受ける。
+    -- 変わる(旧 herdr は後者を有効化していた)ため、両方を受ける。
     -- remap=true は必須: gcc/gc 自体がデフォルトマッピングなので noremap だと空振りする。
     keymap("n", "<C-_>", "gcc", { remap = true, desc = "行コメントトグル" })
     keymap("n", "<C-/>", "gcc", { remap = true, desc = "行コメントトグル" })

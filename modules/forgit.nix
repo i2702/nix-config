@@ -66,7 +66,7 @@ in
   home.packages = [ forgit ];
 
   # mkOrder は付けない (= 既定の 1000)。zsh.nix の initContent (order 1200) より
-  # 前でありさえすればよい。あちらは末尾で herdr/tmux を起動してそこで実行が
+  # 前でありさえすればよい。あちらは末尾で tmux を起動してそこで実行が
   # 止まるため、後ろに置くとマルチプレクサを抜けるまでエイリアスが定義されない。
   programs.zsh.initContent = ''
     ${aliasOverrides}

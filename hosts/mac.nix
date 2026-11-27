@@ -3,6 +3,7 @@
   imports = [
     ../modules/m1ddc.nix
     ../modules/raycast.nix
+    ../modules/sleep.nix
   ];
 
   # Macの実際のログインユーザー名に合わせて調整すること(現時点では未確定のため

@@ -4,7 +4,6 @@ description: >-
   Herdr app(herdr-app)と herdr-core(hc)で、エージェントやプログラムを起動・指示・待機・回収するとき、
   スペース・タブ・ペインを作成・分割・移動するとき、レイアウトや mod を変えるときに使う。
   「hc」「herdr-app」「ヘルパーエージェントを起動」「スペース/タブ/ペインを作る」に言及されたときも参照する。
-  旧来の herdr TUI(`herdr` コマンド)の設定変更や更新は herdr-config を使う。
 ---
 
 # Herdr app / herdr-core の操作
@@ -29,7 +28,7 @@ description: >-
 
 ## 守ること
 
-- `herdr`(旧 TUI)と `herdr-app` / `hc` は別物。コマンドを混ぜない。
+- 旧 TUI の `herdr` コマンドは削除済み。`herdr-app` / `hc` だけを使う。
 - 新しいスペースやタブはすぐ画面に表示されるので、ユーザーが求めたときだけ作る。
   見せる必要のない裏方の作業は `hc` だけで行う。
 - 待つときは `hc wait` を使い、`sleep` やポーリングはしない。

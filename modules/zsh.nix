@@ -128,23 +128,8 @@ let
     #             nf-seti-windows (U+E62A) は拾われず豆腐になったので、この字でなければ駄目。
     _window_title_local=$'\U0000F8FF Mac'
 
-    # タイトルの出し先は herdr の内と外で変わる。
-    # herdr のペインが出した OSC 2 は herdr 自身のターミナルエミュレータが吸って
-    # ペインの表示名 (サイドバーの terminal_title) になるだけで、外側の Ghostty には
-    # 届かない。herdr 配下では socket API の client.window_title.set を使う。
-    # 専用の CLI サブコマンドは無いので zsh の zsocket で直接叩く (外部コマンド不要)。
     _set_window_title() {
-      if [[ -n "$HERDR_PANE_ID" && -S "$HERDR_SOCKET_PATH" ]]; then
-        zmodload zsh/net/socket 2>/dev/null || return
-        zsocket "$HERDR_SOCKET_PATH" 2>/dev/null || return
-        local fd=$REPLY
-        print -u$fd -r -- "{\"id\":\"window_title\",\"method\":\"client.window_title.set\",\"params\":{\"title\":\"$1\"}}"
-        # 応答は使わないが読む。読まずに閉じると herdr 側が書き込みで転ける。
-        read -r -t 1 -u$fd
-        exec {fd}>&-
-      else
-        printf '\033]2;%s\a' "$1"
-      fi
+      printf '\033]2;%s\a' "$1"
     }
 
     # ssh 先ごとのタイトル。表に無いホストでは何も返さず、タイトルはローカルのまま据え置く。
@@ -166,7 +151,7 @@ let
     }
 
     # ssh している間だけタイトルを差し替え、抜けたらローカルへ戻す。
-    # Why not: ウィンドウタイトルは Ghostty ウィンドウ全体の属性で、herdr のペインごとには
+    # Why not: ウィンドウタイトルは Ghostty ウィンドウ全体の属性で、マルチプレクサのペインごとには
     # 持てない。複数ペインで同時に ssh すると最後に出入りしたペインの状態が全体に出る。
     ssh() {
       local remote
@@ -179,8 +164,8 @@ let
     }
 
     # Why not (無条件で呼ばない理由): .zshrc は「ユーザーが見ている新しいシェル」以外でも
-    # 実行される。Claude Code の shell snapshot (tty 無しの interactive zsh) はペインの
-    # HERDR_SOCKET_PATH を継承したままこの行に到達し、ssh 中の "󰖳 Win" を " Mac" へ
+    # 実行される。Claude Code の shell snapshot (tty 無しの interactive zsh) も
+    # この行に到達し、ssh 中の "󰖳 Win" を " Mac" へ
     # 巻き戻してしまう。実端末に繋がったシェルだけが起動時タイトルを主張する。
     [[ -t 0 ]] && _set_window_title "$_window_title_local"
   '';
@@ -302,7 +287,6 @@ in
 
     shellAliases = {
       t = "tmux";
-      h = "herdr";
       p = "pnpm";
       c = "claude";
       lg = "lazygit";
@@ -446,7 +430,7 @@ in
 
       # nixのパスも無条件でprependする。/etc/zshrc等の標準フックに任せないのは、
       # ガード変数(__ETC_PROFILE_NIX_SOURCED)が環境系譜で一度しか効かず、
-      # herdr/tmux配下のネストしたログインシェルではpath_helperの並べ替えで
+      # マルチプレクサ配下のネストしたログインシェルではpath_helperの並べ替えで
       # /usr/binが先頭に戻り、Apple git等がnix供給版より優先されてしまうため。
       export PATH="$HOME/bin:$HOME/.local/bin:$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
       typeset -U path PATH
@@ -468,7 +452,7 @@ in
       [ -f "$HOME/.vite-plus/env" ] && . "$HOME/.vite-plus/env"
 
       # 新規ターミナル(ホーム直起動)時の初期作業ディレクトリを ~/Repository に変更
-      # マルチプレクサ自動起動より前に実行し、herdr/tmux セッションの初期ディレクトリにも反映させる。
+      # マルチプレクサ自動起動より前に実行し、tmux セッションの初期ディレクトリにも反映させる。
       # $PWD == $HOME に限定することで、プロジェクト内で開いた新規ペインが飛ばされるのを防ぐ。
       if [[ "$PWD" == "$HOME" && -d "$HOME/Repository" ]]; then
         cd "$HOME/Repository"
@@ -479,13 +463,10 @@ in
       # ==========================================
       # ターミナルマルチプレクサの自動起動
       #   - Zed のターミナル($ZED_TERM が設定される)     → tmux
-      #   - それ以外(Ghostty など通常ターミナル)          → 何もしない(herdr は必要なときに手動で起動する)
+      #   - それ以外(Ghostty など通常ターミナル)          → 何もしない
       #
-      # 【同時起動の防止】既に herdr($HERDR_PANE_ID)または tmux($TMUX)の
-      #   セッション内にいる場合は何もしない。これで
-      #     - tmux 内で再帰的に tmux が起動する
-      #     - herdr ペイン内で tmux が入れ子に起動する
-      #   のいずれも防ぐ($HERDR_PANE_ID / $TMUX はどちらも子シェルへ継承される)。
+      # 【同時起動の防止】既に tmux($TMUX)のセッション内にいる場合は何もしない。
+      #   これで tmux 内で再帰的に tmux が起動するのを防ぐ($TMUX は子シェルへ継承される)。
       #
       # 【対話シェル限定】-o interactive のときだけ起動する。Zed エージェントパネルが
       #   実行するコマンドは非対話シェル(.zshrc を読み込まない)なので、そもそもここへ
@@ -494,7 +475,7 @@ in
       #   (補足: Zed には通常ターミナルとエージェント用ターミナルを区別する環境変数が
       #    無いため、Zed のターミナルは一律 tmux とする。)
       # ==========================================
-      if [[ -o interactive && -n "$ZED_TERM" && -z "$TMUX" && -z "$HERDR_PANE_ID" ]]; then
+      if [[ -o interactive && -n "$ZED_TERM" && -z "$TMUX" ]]; then
         command -v tmux &> /dev/null && tmux
       fi
 

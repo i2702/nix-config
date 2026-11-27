@@ -135,5 +135,72 @@ in
       compadd -a branches
     }
     compdef _cw cw
+
+    # ブランチ $1 のワークツリーのパスを出す。引数なしならメインのチェックアウト(先頭の worktree)。
+    __dw_worktree_of() {
+      git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/$1" -v want_main=$(( $# == 0 )) '
+        /^worktree / { p = substr($0, 10); if (want_main) { print p; exit } }
+        $0 == "branch " b { print p; exit }'
+    }
+
+    # dw [-f] [ブランチ名]: ワークツリーをブランチごと消す。ブランチ名を省くと今いるワークツリー。
+    # 未コミットの変更も未マージのコミットも捨てる(worktree remove --force + branch -D)。
+    # 命名ルール([種別]/...)のブランチは作業の本体なので、-f を付けたときだけ消す。
+    dw() {
+      local force=0
+      [[ $1 == -f ]] && { force=1; shift; }
+      if (( $# > 1 )) || [[ $1 == -* ]]; then
+        print -u2 "usage: dw [-f] [branch]"
+        return 2
+      fi
+      git rev-parse --git-dir >/dev/null 2>&1 || { print -u2 "dw: git リポジトリではありません"; return 1; }
+
+      local branch="$1"
+      if [[ -z $branch ]]; then
+        branch="$(git symbolic-ref --quiet --short HEAD)" || { print -u2 "dw: detached HEAD なのでブランチ名を指定してください"; return 1; }
+      fi
+      git show-ref --verify --quiet "refs/heads/$branch" || { print -u2 "dw: ブランチ $branch がありません"; return 1; }
+
+      if [[ $branch == (main|develop) ]]; then
+        print -u2 "dw: $branch は消せません"
+        return 1
+      fi
+      if [[ $branch =~ '^((spike|wip|archive)/)?(feature|bugfix|fix|chore|refactor|docs|test)/' ]] && (( ! force )); then
+        print -u2 "dw: $branch は命名ルールに沿ったブランチです。消すなら dw -f $branch"
+        return 1
+      fi
+
+      local main_wt wt
+      main_wt="$(__dw_worktree_of)"
+      wt="$(__dw_worktree_of "$branch")"
+      if [[ -n $wt && $wt == $main_wt ]]; then
+        print -u2 "dw: $branch はメインのチェックアウトで使われています"
+        return 1
+      fi
+
+      # 消すワークツリーの中にいたら、先にメインのチェックアウトへ出る
+      if [[ -n $wt && ''${PWD:A}/ == ''${wt:A}/* ]]; then
+        builtin cd -- "$main_wt" || return 1
+      fi
+
+      # gwq rm -b は使わない。ワークツリー内で実行するとブランチ削除だけ失敗し、しかも終了コードが 0 になる。
+      # パターンも部分一致なので、名前の似た別のワークツリーを消しかねない。
+      if [[ -n $wt ]]; then
+        git -C "$main_wt" worktree remove --force "$wt" || return 1
+      fi
+      git -C "$main_wt" branch -D -- "$branch" || return 1
+      print -u2 "dw: $branch''${wt:+ と $wt} を削除しました"
+    }
+
+    _dw() {
+      local main_wt
+      main_wt="$(__dw_worktree_of)"
+      local -a branches
+      branches=("''${(@f)$(git worktree list --porcelain 2>/dev/null | awk -v m="$main_wt" '
+        /^worktree / { p = substr($0, 10) }
+        /^branch refs\/heads\// && p != m { print substr($0, 19) }')}")
+      _arguments '-f[命名ルールのブランチも消す]' "1:branch:(''${branches[*]})"
+    }
+    compdef _dw dw
   '';
 }

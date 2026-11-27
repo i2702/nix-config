@@ -8,31 +8,6 @@ nix で宣言できず、マシンごとに手で実行する必要がある作�
 
 ---
 
-## herdr 更新後の live-handoff
-
-`nix flake update herdr` + `home-manager switch` の後、socket プロトコルの
-バージョンが上がっていると、起動中の旧サーバと新 CLI が不一致になる。
-
-```bash
-herdr pane list   # → {"error":{"code":"protocol_mismatch",...}} なら不一致
-```
-
-この状態ではキーバインドのシェルスクリプト(Alt-f / Alt-a / Alt-e)と cd 毎の
-ペインラベル更新が止まる。解消はこのコマンド:
-
-```bash
-herdr server live-handoff --import-exe ~/.nix-profile/bin/herdr
-```
-
-`--import-exe` を省略するとサーバは自分の `current_exe()`(= 旧 store パス)を
-再実行してしまい更新されない。
-
-**`herdr server stop` は使わない。** ペインのプロセスを全部殺すので、作業中の
-エージェントも落ちる。live-handoff はライブペインを保持したまま引き継ぐ経路で、
-プロトコル不一致状態でも通る唯一のコマンド。
-
----
-
 ## git identity
 
 `templates/git-config.local.example` を `~/.config/git/config.local` にコピーして

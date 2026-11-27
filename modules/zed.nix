@@ -5,7 +5,7 @@
   #
   # 設定の出所: ベースは ~/Repository/github.com/i2702/zedzed リポジトリ
   # (settings.json / keymap.json)。zedzed 自体は nix 管理しない(別マシンと共有する
-  # 生きたリポジトリなので、ここへ内容を取り込むだけ)。それに Mac/herdr 固有の追加
+  # 生きたリポジトリなので、ここへ内容を取り込むだけ)。それに Mac 固有の追加
   # (下記コメント参照)を重ねたものがこのモジュールの内容。設定変更はこのファイルを編集して
   # home-manager switch で反映する(nix 管理の読み取り専用シンボリックリンクになるため、
   # Zed の設定 UI からの書き込みは反映されない点に注意)。
@@ -80,17 +80,10 @@
       "current_line_highlight": "all",
       "cursor_blink": true,
       "autosave": "on_focus_change",
-      // [Mac/herdr 固有] Zed 内蔵ターミナルと herdr の統合
+      // [Mac 固有] Zed 内蔵ターミナル
       "terminal": {
-        // Option(Alt)キーをメタキーとして送出し、herdr等のAltショートカットを効かせる
-        "option_as_meta": true,
-        // Zedのターミナルでは"zed"という名前付きセッションのherdrにアタッチする。
-        // Ghostty(defaultセッション)とはspace/ペイン/agents一覧が完全に分離され、
-        // 両方を同時に開いても表示が同期しなくなる。config.tomlは全セッション共通なので
-        // キーバインドやスクリプトはそのまま効く。
-        "env": {
-          "HERDR_SESSION": "zed"
-        }
+        // Option(Alt)キーをメタキーとして送出し、シェルや tmux の Alt ショートカットを効かせる
+        "option_as_meta": true
       },
       "buffer_font_family": "HackGen Console NF",
       "hard_tabs": false,
@@ -206,7 +199,7 @@
         }
       },
       {
-        // [Mac/herdr 固有] ターミナル内では Alt 系をすべて素通りさせ、herdr に届ける
+        // [Mac 固有] ターミナル内では Alt 系をすべて素通りさせ、シェルや tmux に届ける
         // (settings.json の terminal.option_as_meta=true と併用)
         "context": "Terminal",
         "bindings": {

@@ -7,22 +7,11 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # herdr は nixpkgs 未収録のため、公式リポジトリの flake から取得する
-    # (リポジトリは 2026-07-29 に ogulcancelik/herdr から herdrdev 組織へ移管された。
-    #  旧 URL は GitHub の 301 リダイレクト頼みになるので移管後の URL を直接指す)
-    herdr = {
-      url = "github:herdrdev/herdr";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
-  outputs = { nixpkgs, home-manager, herdr, ... }:
+  outputs = { nixpkgs, home-manager, ... }:
     let
-      # herdr の overlay を適用し、各モジュールから pkgs.herdr として参照できるようにする
-      pkgsFor = system: import nixpkgs {
-        inherit system;
-        overlays = [ herdr.overlays.default ];
-      };
+      pkgsFor = system: import nixpkgs { inherit system; };
     in
     {
       homeConfigurations."linux" = home-manager.lib.homeManagerConfiguration {

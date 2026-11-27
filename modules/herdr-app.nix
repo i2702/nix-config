@@ -16,7 +16,7 @@ let
 
   # キー割り当て(https://herdr.dev のアプリ内ガイド ~/.config/herdr-app/AGENTS.md「Keys」)。
   # OS ごとにアプリが初回起動時に書き出した既定値をそのまま持ち、その上に旧 herdr
-  # (modules/herdr.nix)の Alt 系(herdrKeys、OS 共通)を重ねる。既定値ごと持つ理由: keys.json は
+  # (TUI。削除済み)の Alt 系(herdrKeys、OS 共通)を重ねる。既定値ごと持つ理由: keys.json は
   # 既定値への差分ではなくキー割り当ての全体として読まれ、書かなかった既定キー(cmd-c など)が
   # 消えるおそれがあるため。既定値が OS で違う(Mac は cmd、Windows は ctrl-shift が主)ので分ける。
   #
@@ -235,7 +235,7 @@ let
   settingsFile = pkgs.writeText "herdr-app-settings.json" (builtins.toJSON settings);
 in
 {
-  # herdr-app: herdr のデスクトップアプリ版(旧 herdr = TUI とは別物。modules/herdr.nix とは独立)。
+  # herdr-app: herdr のデスクトップアプリ版(旧 herdr = TUI とは別物)。
   # 本体は公式インストーラで入れたアプリで(Mac の ~/.local/bin/herdr-app はアプリ自身が張るリンク)、
   # 自動更新もアプリに任せるため nix ではパッケージを入れない。Mac と Windows(WSL から書き出す)で使っている。
   #

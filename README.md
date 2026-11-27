@@ -38,7 +38,7 @@ home-manager switch --flake .#linux
 nix run home-manager -- switch --flake .#mac   # または .#linux
 ```
 
-`switch` だけでは復元されない手動作業（herdr のブラウザプラグインなど）は
+`switch` だけでは復元されない手動作業（Raycast のスクリプト登録など）は
 [MANUAL.md](MANUAL.md) にまとめている。
 
 ---
@@ -47,7 +47,7 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 
 ```
 .
-├── flake.nix              # inputs (nixpkgs / home-manager / herdr) と 2 つの homeConfiguration
+├── flake.nix              # inputs (nixpkgs / home-manager) と 2 つの homeConfiguration
 ├── flake.lock             # 依存の固定
 ├── MANUAL.md              # nix で宣言できない手動セットアップの記録
 ├── home.nix               # 共通設定・全モジュールの imports
@@ -58,7 +58,7 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 │   ├── zsh.nix            # Zsh / Oh My Zsh / alias / プロンプト / WSL 連携
 │   ├── git.nix  gh.nix  lazygit.nix  forgit.nix
 │   ├── neovim.nix  vim.nix
-│   ├── herdr.nix          # ターミナルマルチプレクサ（自動起動）
+│   ├── herdr-app.nix      # Herdr app のキー割り当て・設定・自作 mod
 │   └── ghostty.nix  wezterm.nix
 └── templates/
     ├── git-config.local.example       # git identity のテンプレート
@@ -76,7 +76,6 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 | Nix Flakes | 依存の固定と再現可能なビルド |
 | home-manager | ユーザー環境（dotfiles / パッケージ）の宣言的管理 |
 | nixpkgs (`nixos-unstable`) | パッケージ供給元 |
-| [herdr](https://herdr.dev) flake input | nixpkgs 未収録のため公式 flake を overlay で取り込み |
 
 ### シェル
 | 技術 | 備考 |
@@ -85,14 +84,12 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 | Oh My Zsh | `half-life` テーマ（プロンプトを独自カスタマイズ）、`git` プラグイン |
 | zsh-autosuggestion | 履歴補完 |
 
-主なエイリアス: `h`=herdr, `p`=pnpm, `c`=claude, `lg`=lazygit, `v`/`nv`/`vim`=nvim, `z`=zed。空 Enter で `ls`、`less` は `bat` で置き換え。
+主なエイリアス: `p`=pnpm, `c`=claude, `lg`=lazygit, `v`/`nv`/`vim`=nvim, `z`=zed。空 Enter で `ls`、`less` は `bat` で置き換え。
 
 ### ターミナルマルチプレクサ
 | 技術 | 位置づけ |
 | --- | --- |
-| [herdr](https://herdr.dev) | 新規シェルで自動起動・アタッチ。Alt キー中心のキーバインドと、自動タイル分割（4 ペインで 2×2）を独自スクリプトで実装 |
-
-> herdr モジュールの詳細な内部仕様は開発メモに別途記録あり（カスタムコマンドの環境変数、`layout.apply` の破壊的挙動、agent rename の落とし穴など）。
+| [Herdr app](https://herdr.dev) | デスクトップアプリ（公式インストーラで導入、nix 管理外）。キー割り当て・設定・自作 mod（自動タイル分割など）を `modules/herdr-app.nix` が配置 |
 
 ### エディタ
 | 技術 | 構成 |
@@ -111,7 +108,7 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 ### ターミナルエミュレータ
 | 技術 | 環境 | 備考 |
 | --- | --- | --- |
-| [Ghostty](https://ghostty.org) | macOS | 本体は GUI アプリ（nix 管理外）、設定のみ配置。`macos-option-as-alt` 有効、ネイティブタブは herdr のワークスペース切替と競合するため無効化 |
+| [Ghostty](https://ghostty.org) | macOS | 本体は GUI アプリ（nix 管理外）、設定のみ配置。`macos-option-as-alt` 有効、ネイティブタブ・split は無効化 |
 | [WezTerm](https://wezterm.org) | WSL | 同じく Windows 側アプリ（nix 管理外）。WSL ドメイン `WSL:Ubuntu` で Ubuntu を起動。設定（Lua）のみ `%USERPROFILE%\.wezterm.lua` へ配置 |
 
 ### CLI ユーティリティ
@@ -119,7 +116,6 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 | --- | --- |
 | ripgrep | 高速 grep（Telescope の live_grep でも使用） |
 | bat | `less` の代替ページャ |
-| jq | herdr の自動タイル / フォーカス制御スクリプト |
 | gcc / GNU Make | Neovim ネイティブプラグインのビルド |
 | nkf | **WSL のみ**。クリップボード連携時の UTF-8 → Shift-JIS 変換 |
 
@@ -136,7 +132,6 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 | ターミナルエミュレータ | Ghostty | WezTerm（Windows 側アプリから Ubuntu を起動） |
 | クリップボード | macOS ネイティブ | `clip.exe` + `nkf`（UTF-8 → Shift-JIS）でラップ |
 | エディタ起動 | `zed` = `Zed.app` 同梱 CLI を直接指定 | `e` = `explorer.exe` |
-| herdr space 切替 | `cmd` 系キー（macOS では cmd が herdr まで届く） | — |
 | 追加パッケージ | — | `nkf` |
 
 ### WSL 固有の追加設定（`modules/zsh.nix` の `isLinux` 分岐）
@@ -149,7 +144,7 @@ nix run home-manager -- switch --flake .#mac   # または .#linux
 
 ### macOS 固有の設定
 
-- **Ghostty**（`modules/ghostty.nix`）: `macos-option-as-alt` で Option を Alt として送出（herdr の Alt バインド用）。ネイティブタブ・split 系キー（`cmd+t` / `cmd+[` / `cmd+]` など）は herdr のワークスペース切替と競合するため `unbind`。
+- **Ghostty**（`modules/ghostty.nix`）: `macos-option-as-alt` で Option を Alt として送出。ネイティブタブ・split 系キー（`cmd+t` / `cmd+[` / `cmd+]` など）は使わないため `unbind`。
 - **Zed CLI**: macOS では `zed` が PATH に無いため、`z` / `za` エイリアスを `Zed.app` 同梱 CLI の絶対パスに割り当て。
 - **Raycast Script Command**（`modules/raycast.nix`）: `~/.config/raycast/scripts` に Focus Mac Window / Focus Win Window を配置。ウィンドウタイトル（`modules/zsh.nix` が出す " Mac" / "󰖳 Win"）で Ghostty のウィンドウを探し、ホットキー一発で前面に出す。Ghostty 自身の AppleScript 辞書（`activate window`）を使うので補助アクセスは不要。ディレクトリの登録と Raycast → Ghostty の Automation 許可は手動（MANUAL.md）。 同じ場所に hitoka-benq / hitoka-dell も配置。フルスクリーンではないウィンドウを指定したディスプレイへ集めるコマンドで、実体は nix 管理外の [hitoka](https://github.com/i2702/hitoka)。ビルドと補助アクセスの許可は手動（MANUAL.md）。
 

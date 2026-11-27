@@ -33,7 +33,7 @@ in
     # shim (__GWQ_CD_SHIM) 経由のときだけ効くフラグなので、
     # スクリプトやエージェントの非対話 `gwq add` の挙動は変わらない。
     auto_cd_on_add = true
-    # サブシェル起動(true)にしないのは、herdr がペイン cwd を
+    # サブシェル起動(true)にしないのは、旧 herdr (TUI) がペイン cwd を
     # 「OSC 7 報告 → ペイン直下のルートシェルのプロセス cwd」の順で解決するため。
     # サブシェル方式だとルートシェルは元のディレクトリのまま gwq を待ってブロックし、
     # split / new_cwd = "follow" が worktree ではなく移動前のディレクトリに新ペインを開いてしまう。

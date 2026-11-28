@@ -2,16 +2,19 @@
 let
   # 作業を終えるコマンド。WSL の入った Windows 機を休止させ、Mac をスリープさせる。
   #
+  # Why not (bye にしない理由): zsh には exit の別名のビルトイン bye があり、
+  # PATH 上のコマンドより先に選ばれて、打ってもシェルが閉じるだけになる。
+  #
   # Why not (Mac 専用モジュールにしない理由): herdr で WSL に入ったペインから
   # 打ち間違えたときに、command not found ではなく Mac 専用だと分かる案内を出したい。
   # そのため Linux にも入れ、実行時に OS を見て弾く。mac-sleep を nix のパスで
   # 参照せず PATH から呼ぶのも同じ理由で、mac-sleep が依存する blueutil は
   # Linux ではビルドできない。
-  bye = pkgs.writeShellApplication {
-    name = "bye";
+  owari = pkgs.writeShellApplication {
+    name = "owari";
     text = ''
       if [[ $(uname -s) != Darwin ]]; then
-        echo "bye は Mac 専用です。Mac から打ってください" >&2
+        echo "owari は Mac 専用です。Mac から打ってください" >&2
         exit 1
       fi
 
@@ -31,5 +34,5 @@ let
   };
 in
 {
-  home.packages = [ bye ];
+  home.packages = [ owari ];
 }

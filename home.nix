@@ -40,7 +40,7 @@
     ./modules/zed.nix
     ./modules/claude-code.nix
     ./modules/aobazuku.nix
-    ./modules/bye.nix
+    ./modules/owari.nix
   ];
 
   programs.home-manager.enable = true;
